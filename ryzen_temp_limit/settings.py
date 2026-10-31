@@ -78,6 +78,8 @@ def legacy_data_dir() -> Path | None:
 
 
 def _migrate_legacy(target: Path) -> None:
+    if os.environ.get("RYZEN_TEMP_LIMIT_DIR"):
+        return
     legacy_dir = legacy_data_dir()
     if legacy_dir is None:
         return
