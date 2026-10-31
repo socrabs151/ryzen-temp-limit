@@ -1,0 +1,498 @@
+﻿from __future__ import annotations
+
+import argparse
+import ctypes
+import os
+import sys
+import time
+import tkinter as tk
+import webbrowser
+from tkinter import ttk
+
+from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__
+from . import autostart, core
+from . import settings as settings_mod
+from .elevation import is_admin, message_box, relaunch_as_admin
+from .settings import Settings
+
+PAWNIO_URL = "https://github.com/namazso/PawnIO.Setup/releases/latest"
+INTERVALS = [1, 5, 10, 15, 30]
+ERROR_COLOR = "#c42b1c"
+TEXT_COLOR = "#1a1a1a"
+HINT_COLOR = "#666666"
+
+BODY = ("Segoe UI", 9)
+SMALL = ("Segoe UI", 8)
+TITLE = ("Segoe UI Semibold", 12)
+BIG = ("Segoe UI Semibold", 26)
+MONO = ("Consolas", 9)
+
+
+def _asset(name: str):
+    from pathlib import Path
+
+    base = getattr(sys, "_MEIPASS", None)
+    if base:
+        path = Path(base) / "ryzen_temp_limit" / "assets" / name
+    else:
+        path = Path(__file__).resolve().parent / "assets" / name
+    return path if path.exists() else None
+
+
+def _enable_dpi_awareness() -> None:
+    if os.name != "nt":
+        return
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+def _run_apply_only() -> int:
+    current = settings_mod.load()
+    try:
+        core.start_pawnio_service()
+        message = core.apply_temp(current.temp)
+        limit = core.read_limit()
+        detail = f" (SMU reports {limit:.0f} °C)" if limit is not None else ""
+        core.log.info("apply-only: %s%s", message, detail)
+        return 0
+    except Exception as exc:
+        core.log.error("apply-only failed: %s", exc)
+        return 1
+
+
+class App(tk.Tk):
+    def __init__(self, settings: Settings) -> None:
+        super().__init__()
+        self.settings = settings
+        self.live = core.Live()
+        self._live_errors = 0
+        self._syncing = False
+
+        self.title(APP_NAME)
+        self.minsize(600, 640)
+        icon = _asset("icon.ico")
+        if icon:
+            try:
+                self.iconbitmap(str(icon))
+            except tk.TclError:
+                pass
+
+        self.temp_var = tk.IntVar(value=settings.temp)
+        self.scale_var = tk.DoubleVar(value=float(settings.temp))
+        self.autostart_var = tk.BooleanVar(value=settings.autostart)
+        self.interval_var = tk.StringVar(value=f"{settings.interval_min} min")
+        self.model_var = tk.StringVar(value="Detecting processor…")
+        self.driver_var = tk.StringVar(value="Checking PawnIO…")
+        self.status_var = tk.StringVar(value="Starting…")
+        self.current_var = tk.StringVar(value="—")
+        self.limit_var = tk.StringVar(value="—")
+        self.load_var = tk.StringVar(value="—")
+        self.power_var = tk.StringVar(value="—")
+        self.gfx_var = tk.StringVar(value="—")
+
+        self._setup_style()
+        self._build()
+        self._fit_to_content()
+        self.temp_var.trace_add("write", self._on_temp_changed)
+        self.bind("<Return>", lambda _event: self._apply())
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.after(60, self._startup)
+        self.after(400, self._poll)
+
+    def _setup_style(self) -> None:
+        style = ttk.Style(self)
+        if "vista" in style.theme_names():
+            style.theme_use("vista")
+        style.configure("Title.TLabel", font=TITLE)
+        style.configure("Hint.TLabel", font=SMALL, foreground=HINT_COLOR)
+        style.configure("Big.TLabel", font=BIG)
+
+    def _fit_to_content(self) -> None:
+        self.update_idletasks()
+        width = max(660, self.winfo_reqwidth() + 24)
+        height = max(640, self.winfo_reqheight() + 24)
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        width = min(width, screen_w - 80)
+        height = min(height, screen_h - 120)
+        x = max(0, (screen_w - width) // 2)
+        y = max(0, (screen_h - height) // 2 - 24)
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        self.minsize(min(600, width), min(560, height))
+
+    def _build(self) -> None:
+        outer = ttk.Frame(self, padding=12)
+        outer.pack(fill="both", expand=True)
+
+        head = ttk.Frame(outer)
+        head.pack(fill="x")
+        ttk.Label(head, text=APP_NAME, style="Title.TLabel").pack(anchor="w")
+        ttk.Label(head, textvariable=self.model_var, style="Hint.TLabel").pack(anchor="w", pady=(1, 0))
+
+        self._build_temperature(outer)
+        self._build_status(outer)
+        self._build_background(outer)
+        self._build_activity(outer)
+        self._build_footer(outer)
+
+    def _build_temperature(self, parent: tk.Misc) -> None:
+        group = ttk.LabelFrame(parent, text="Temperature limit", padding=10)
+        group.pack(fill="x", pady=(10, 0))
+
+        top = ttk.Frame(group)
+        top.pack(fill="x")
+        ttk.Label(top, text="Current temperature:").pack(side="left")
+        self.current_label = ttk.Label(top, textvariable=self.current_var, style="Big.TLabel")
+        self.current_label.pack(side="left", padx=(8, 4))
+        ttk.Label(top, text="°C").pack(side="left", pady=(10, 0))
+
+        self.scale = ttk.Scale(
+            group, from_=MIN_TEMP, to=MAX_TEMP, orient="horizontal",
+            variable=self.scale_var, command=self._on_scale,
+        )
+        self.scale.pack(fill="x", pady=(8, 8))
+
+        row = ttk.Frame(group)
+        row.pack(fill="x")
+        ttk.Label(row, text="Limit:").pack(side="left")
+        self.spin = ttk.Spinbox(
+            row, from_=MIN_TEMP, to=MAX_TEMP, increment=1,
+            textvariable=self.temp_var, width=5, justify="center",
+        )
+        self.spin.pack(side="left", padx=(6, 4))
+        ttk.Label(row, text="°C").pack(side="left")
+        self.apply_button = ttk.Button(row, text="Apply", command=self._apply)
+        self.apply_button.pack(side="left", padx=(14, 0))
+
+        ttk.Label(
+            group, text="A lower limit reduces heat, but also sustained performance.",
+            style="Hint.TLabel",
+        ).pack(anchor="w", pady=(8, 0))
+
+    def _build_status(self, parent: tk.Misc) -> None:
+        group = ttk.LabelFrame(parent, text="Status", padding=10)
+        group.pack(fill="x", pady=(10, 0))
+        group.columnconfigure(1, weight=1)
+        group.columnconfigure(3, weight=1)
+
+        cells = [
+            ("CPU load:", self.load_var),
+            ("Package power:", self.power_var),
+            ("iGPU clock:", self.gfx_var),
+        ]
+        ttk.Label(group, text="Limit in SMU:").grid(row=0, column=0, sticky="w", pady=1)
+        ttk.Label(group, textvariable=self.limit_var).grid(row=0, column=1, sticky="w", padx=(6, 20), pady=1)
+        for index, (label, variable) in enumerate(cells):
+            row, column = divmod(index + 1, 2)
+            column *= 2
+            ttk.Label(group, text=label).grid(row=row, column=column, sticky="w", pady=1)
+            ttk.Label(group, textvariable=variable).grid(
+                row=row, column=column + 1, sticky="w", padx=(6, 20), pady=1
+            )
+
+    def _build_background(self, parent: tk.Misc) -> None:
+        group = ttk.LabelFrame(parent, text="Background", padding=10)
+        group.pack(fill="x", pady=(10, 0))
+
+        ttk.Checkbutton(
+            group, text="Keep the limit applied automatically",
+            variable=self.autostart_var, command=self._on_autostart,
+        ).pack(anchor="w")
+
+        row = ttk.Frame(group)
+        row.pack(fill="x", pady=(7, 0))
+        ttk.Label(row, text="Re-apply every:").pack(side="left")
+        self.interval_box = ttk.Combobox(
+            row, values=[f"{value} min" for value in INTERVALS],
+            textvariable=self.interval_var, state="readonly", width=8,
+        )
+        self.interval_box.pack(side="left", padx=(6, 0))
+        self.interval_box.bind("<<ComboboxSelected>>", lambda _event: self._on_interval())
+        ttk.Button(row, text="Run now", command=self._run_now).pack(side="left", padx=(10, 0))
+
+        ttk.Label(
+            group,
+            text=(
+                "Firmware resets the limit after reboot or sleep, so the task re-applies it "
+                "at startup, on resume and periodically."
+            ),
+            style="Hint.TLabel", wraplength=590, justify="left",
+        ).pack(anchor="w", pady=(8, 0))
+
+    def _build_activity(self, parent: tk.Misc) -> None:
+        group = ttk.LabelFrame(parent, text="Activity", padding=(10, 8))
+        group.pack(fill="both", expand=True, pady=(10, 0))
+        group.columnconfigure(0, weight=1)
+        group.rowconfigure(0, weight=1)
+
+        self.log_text = tk.Text(
+            group, height=6, wrap="word", font=MONO, state="disabled",
+            relief="solid", borderwidth=1, highlightthickness=0,
+            padx=6, pady=4, background="#ffffff", foreground="#333333",
+        )
+        self.log_text.grid(row=0, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(group, orient="vertical", command=self.log_text.yview)
+        scroll.grid(row=0, column=1, sticky="ns")
+        self.log_text.configure(yscrollcommand=scroll.set)
+        self.log_text.tag_configure("ok", foreground=TEXT_COLOR)
+        self.log_text.tag_configure("err", foreground=ERROR_COLOR)
+        self.log_text.tag_configure("muted", foreground=HINT_COLOR)
+
+    def _build_footer(self, parent: tk.Misc) -> None:
+        footer = ttk.Frame(parent)
+        footer.pack(fill="x", pady=(8, 0))
+
+        self.driver_label = ttk.Label(footer, textvariable=self.driver_var, style="Hint.TLabel")
+        self.driver_label.pack(side="left")
+        self.pawnio_button = ttk.Button(footer, text="Install PawnIO…", command=lambda: webbrowser.open(PAWNIO_URL))
+        ttk.Button(footer, text="Open log", command=self._open_log).pack(side="left", padx=(10, 0))
+
+        self.status_label = ttk.Label(footer, textvariable=self.status_var, style="Hint.TLabel")
+        self.status_label.pack(side="right")
+
+    def _startup(self) -> None:
+        if autostart.task_exists():
+            self.autostart_var.set(True)
+            interval = autostart.task_interval()
+            if interval in INTERVALS:
+                self.interval_var.set(f"{interval} min")
+        else:
+            self.autostart_var.set(False)
+
+        try:
+            info = core.cpu()
+        except Exception as exc:
+            self._log(f"Processor detection failed: {exc}", "err")
+            self.model_var.set("Unsupported or unknown processor")
+            self._set_driver(None)
+            self._status("Cannot read processor info", error=True)
+            return
+
+        self.model_var.set(f"{info.name} · {info.family}")
+
+        version = core.pawnio_version()
+        self._set_driver(version)
+        if version is None:
+            self._log("PawnIO is not installed. Use the Install PawnIO button below.", "err")
+            self._status("PawnIO driver is missing", error=True)
+            return
+        if not info.supported:
+            self._log(f"{info.family} is not supported by zenmaster", "err")
+            self._status("Unsupported processor family", error=True)
+            return
+
+        self._apply(initial=True)
+
+    def _set_driver(self, version: str | None) -> None:
+        if version:
+            self.driver_var.set(f"PawnIO {version}")
+            self.pawnio_button.pack_forget()
+        else:
+            self.driver_var.set("PawnIO not installed")
+            self.pawnio_button.pack(side="left", padx=(8, 0), before=self.driver_label)
+
+    def _on_scale(self, value: str) -> None:
+        if self._syncing:
+            return
+        self._syncing = True
+        try:
+            self.temp_var.set(int(round(float(value))))
+        finally:
+            self._syncing = False
+
+    def _on_temp_changed(self, *_args) -> None:
+        if self._syncing:
+            return
+        try:
+            value = int(self.temp_var.get())
+        except (tk.TclError, ValueError):
+            return
+        self._syncing = True
+        try:
+            self.scale_var.set(float(value))
+        finally:
+            self._syncing = False
+
+    def _target(self) -> int:
+        try:
+            value = int(self.temp_var.get())
+        except (tk.TclError, ValueError):
+            return self.settings.temp
+        return max(MIN_TEMP, min(MAX_TEMP, value))
+
+    def _poll(self) -> None:
+        try:
+            self.live = core.read_live()
+            self._live_errors = 0
+            self._render_live()
+        except Exception as exc:
+            self._live_errors += 1
+            if self._live_errors == 1:
+                self._log(f"Telemetry unavailable: {exc}", "err")
+                self._status("Waiting for hardware access", error=True)
+        finally:
+            self.after(2000, self._poll)
+
+    def _render_live(self) -> None:
+        live = self.live
+        if live.tctl is None:
+            self.current_var.set("—")
+            self.current_label.configure(foreground=TEXT_COLOR)
+        else:
+            self.current_var.set(f"{live.tctl:.1f}")
+            hot = live.tctl >= self._target() - 2
+            self.current_label.configure(foreground=ERROR_COLOR if hot else TEXT_COLOR)
+
+        self.limit_var.set("—" if live.limit is None else f"{live.limit:.0f} °C")
+        self.load_var.set("—" if live.load is None else f"{live.load:.0f} %")
+        self.power_var.set("—" if live.socket_power is None else f"{live.socket_power:.0f} W")
+        self.gfx_var.set("—" if live.gfx_clk is None else f"{live.gfx_clk:.0f} MHz")
+
+    def _apply(self, initial: bool = False) -> None:
+        try:
+            value = int(self.temp_var.get())
+        except (tk.TclError, ValueError):
+            self._status(f"Enter a number between {MIN_TEMP} and {MAX_TEMP}", error=True)
+            return
+        temp = max(MIN_TEMP, min(MAX_TEMP, value))
+        self.temp_var.set(temp)
+        self.settings = self._collect()
+        settings_mod.save(self.settings)
+        try:
+            message = core.apply_temp(temp)
+            limit = core.read_limit()
+            suffix = f" (SMU reports {limit:.0f} °C)" if limit is not None else ""
+            core.log.info("applied %s%s", message, suffix)
+            self._log(f"{message}{suffix}", "ok")
+            self._status(f"Applied at {time.strftime('%H:%M:%S')}")
+            if self.autostart_var.get():
+                self._install_task(silent=True)
+        except Exception as exc:
+            core.log.error("apply failed: %s", exc)
+            self._log(f"Apply failed: {exc}", "err")
+            self._status(str(exc), error=True)
+        self._render_live()
+
+    def _on_autostart(self) -> None:
+        if self.autostart_var.get():
+            self._install_task()
+        else:
+            autostart.remove()
+            core.log.info("background task removed")
+            self._log("Background task removed", "muted")
+            self._status("Background task removed")
+        self._save()
+
+    def _on_interval(self) -> None:
+        if self.autostart_var.get():
+            self._install_task(silent=True)
+        self._save()
+
+    def _install_task(self, silent: bool = False) -> None:
+        current = self._collect()
+        try:
+            autostart.install(current)
+            core.log.info("task installed: temp=%s interval=%s", current.temp, current.interval_min)
+            self._log(f"Background task installed (every {current.interval_min} min)", "ok")
+            self._status("Background task active")
+        except Exception as exc:
+            core.log.error("task install failed: %s", exc)
+            self._log(f"Background task failed: {exc}", "err")
+            self._status(f"Background task failed: {exc}", error=True)
+            if not silent:
+                self.autostart_var.set(False)
+        self._save()
+
+    def _run_now(self) -> None:
+        if not autostart.task_exists():
+            self._log("No background task yet — enable “Keep the limit applied” first", "muted")
+            return
+        autostart.run_now()
+        self._log("Background task started manually", "muted")
+
+    def _interval(self) -> int:
+        try:
+            value = int(str(self.interval_var.get()).split()[0])
+        except (ValueError, IndexError):
+            value = self.settings.interval_min
+        return max(1, min(120, value))
+
+    def _collect(self) -> Settings:
+        return Settings(
+            temp=self._target(),
+            interval_min=self._interval(),
+            autostart=bool(self.autostart_var.get()),
+        ).normalized()
+
+    def _save(self) -> None:
+        self.settings = self._collect()
+        try:
+            settings_mod.save(self.settings)
+        except OSError as exc:
+            self._log(f"Could not save settings: {exc}", "err")
+
+    def _open_log(self) -> None:
+        try:
+            os.startfile(core.log_path())  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    def _status(self, text: str, error: bool = False) -> None:
+        self.status_var.set(text)
+        self.status_label.configure(foreground=ERROR_COLOR if error else HINT_COLOR)
+
+    def _log(self, text: str, level: str = "info") -> None:
+        tag = {"ok": "ok", "err": "err", "muted": "muted"}.get(level, "muted")
+        self.log_text.configure(state="normal")
+        self.log_text.insert("end", f"{time.strftime('%H:%M:%S')}  {text}\n", tag)
+        lines = int(self.log_text.index("end-1c").split(".")[0])
+        if lines > 250:
+            self.log_text.delete("1.0", "60.0")
+        self.log_text.see("end")
+        self.log_text.configure(state="disabled")
+
+    def _on_close(self) -> None:
+        self._save()
+        self.destroy()
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="ryzen-temp-limit", description=APP_NAME)
+    parser.add_argument("--version", action="store_true", help="print version and exit")
+    parser.add_argument("--apply-only", action="store_true", help="apply the saved limit and exit")
+    parser.add_argument("--elevated", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+
+    if args.version:
+        print(__version__)
+        return 0
+    if os.name != "nt":
+        message_box(APP_NAME, "This application requires Windows.", error=True)
+        return 1
+    if args.apply_only:
+        return _run_apply_only()
+
+    _enable_dpi_awareness()
+
+    if not is_admin():
+        if args.elevated:
+            message_box(APP_NAME, "Administrator rights are required.", error=True)
+            return 1
+        if relaunch_as_admin(["--elevated"]):
+            return 0
+        message_box(APP_NAME, "Administrator rights are required to change CPU limits.", error=True)
+        return 1
+
+    current = settings_mod.load()
+    app = App(current)
+    app.mainloop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
