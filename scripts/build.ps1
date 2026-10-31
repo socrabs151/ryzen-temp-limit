@@ -26,12 +26,18 @@ try {
         --collect-data zenmaster `
         --collect-submodules zenmaster `
         --collect-data certifi `
+        --collect-submodules pystray `
+        --hidden-import pystray._win32 `
+        --hidden-import six `
         --add-data "ryzen_temp_limit\assets;ryzen_temp_limit\assets" `
         run.py
 
     $target = if ($OneFile) { Join-Path $root "dist" } else { Join-Path $root "dist\RyzenTempLimit" }
     Copy-Item -LiteralPath (Join-Path $root "LICENSE") -Destination $target -Force
     Copy-Item -LiteralPath (Join-Path $root "THIRD_PARTY_NOTICES.md") -Destination $target -Force
+    if (Test-Path (Join-Path $root "licenses")) {
+        Copy-Item -Recurse -Force (Join-Path $root "licenses") $target
+    }
 
     if ($OneFile) {
         Write-Host "Done: dist\RyzenTempLimit.exe (single file, slower start)"

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import ctypes
@@ -21,6 +21,7 @@ from .elevation import is_admin, message_box, relaunch_as_admin
 from .graph import TemperatureGraph
 from .settings import Settings
 from .single_instance import SingleInstance
+from .tray import Tray
 
 PAWNIO_URL = "https://github.com/namazso/PawnIO.Setup/releases/latest"
 INTERVALS = [1, 5, 10, 15, 30]
@@ -98,6 +99,7 @@ class App(tk.Tk):
         self.temp_var = tk.IntVar(value=settings.temp)
         self.scale_var = tk.DoubleVar(value=float(settings.temp))
         self.autostart_var = tk.BooleanVar(value=settings.autostart)
+        self.close_to_tray_var = tk.BooleanVar(value=settings.close_to_tray)
         self.interval_var = tk.StringVar(value=f"{settings.interval_min} min")
         self.model_var = tk.StringVar(value="Detecting processor…")
         self.driver_var = tk.StringVar(value="Checking PawnIO…")
@@ -114,6 +116,7 @@ class App(tk.Tk):
         self._update_pause_state()
         self._update_restore_button()
         self._fit_to_content()
+        self.tray = Tray(self, _asset("icon.png"))
         self.temp_var.trace_add("write", self._on_temp_changed)
         self.bind("<Return>", lambda _event: self._apply())
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -122,6 +125,7 @@ class App(tk.Tk):
         self.after(400, self._poll)
         self.after(2500, self._task_status_loop)
         self.after(1500, lambda: self._check_updates(manual=False))
+        self.after(900, self._start_tray)
 
     def _setup_style(self) -> None:
         style = ttk.Style(self)
@@ -228,10 +232,16 @@ class App(tk.Tk):
         group = ttk.LabelFrame(parent, text="Background", padding=10)
         group.pack(fill="x", pady=(8, 0))
 
+        checks = ttk.Frame(group)
+        checks.pack(fill="x")
         ttk.Checkbutton(
-            group, text="Keep the limit applied automatically",
+            checks, text="Keep the limit applied automatically",
             variable=self.autostart_var, command=self._on_autostart,
-        ).pack(anchor="w")
+        ).pack(side="left")
+        ttk.Checkbutton(
+            checks, text="Close window to tray",
+            variable=self.close_to_tray_var, command=self._save,
+        ).pack(side="left", padx=(20, 0))
 
         row = ttk.Frame(group)
         row.pack(fill="x", pady=(7, 0))
@@ -415,6 +425,7 @@ class App(tk.Tk):
             self.graph.tick()
         else:
             self.graph.add(live.tctl)
+        self.tray.update(live.tctl, self._target())
 
     def _apply(self, initial: bool = False) -> None:
         try:
@@ -586,6 +597,7 @@ class App(tk.Tk):
             temp=self._target(),
             interval_min=self._interval(),
             autostart=bool(self.autostart_var.get()),
+            close_to_tray=bool(self.close_to_tray_var.get()),
             skipped_version=self.skipped_version,
             original_limit=self.settings.original_limit,
         ).normalized()
@@ -787,9 +799,39 @@ class App(tk.Tk):
         self._status("Update failed", error=True)
         messagebox.showerror(APP_NAME, f"Update failed:\n{message}")
 
-    def _on_close(self) -> None:
+    def _start_tray(self) -> None:
+        if self.tray.start():
+            core.log.info("tray icon started")
+        else:
+            core.log.info("tray icon unavailable")
+            self.close_to_tray_var.set(False)
+
+    def _tray_action(self, name: str) -> None:
+        if name == "show":
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+        elif name == "apply":
+            self._apply()
+        elif name == "restore":
+            self._restore()
+        elif name == "pause":
+            self._pause()
+        elif name == "check":
+            self._check_updates(manual=True)
+        elif name == "exit":
+            self._quit()
+
+    def _quit(self) -> None:
         self._save()
+        self.tray.stop()
         self.destroy()
+
+    def _on_close(self) -> None:
+        if self.tray.active and self.close_to_tray_var.get():
+            self.withdraw()
+            return
+        self._quit()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -821,7 +863,7 @@ def main(argv: list[str] | None = None) -> int:
 
     guard = SingleInstance()
     if guard.already_running:
-        message_box(APP_NAME, "Ryzen Temp Limit is already running.")
+        message_box(APP_NAME, "Ryzen Temp Limit is already running. Use the tray icon to open it.")
         return 0
 
     current = settings_mod.load()

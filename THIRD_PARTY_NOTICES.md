@@ -62,11 +62,25 @@ Corresponding source for the GPL-covered work is available at:
 - Upstream: <https://tukaani.org/xz/>
 - License: 0BSD / public domain.
 
-## Pillow
+## pystray 0.19.5
+
+- Upstream: <https://github.com/moses-palmer/pystray>
+- License: LGPL-3.0
+- Purpose: notification-area icon.
+- The license text is included at `licenses/pystray-COPYING.LGPL`.
+
+## Pillow 13
 
 - Upstream: <https://python-pillow.org/>
-- Used only at build time to generate the application icon; not bundled.
-- License: MIT-CMU.
+- License: MIT-CMU
+- Purpose: loading the tray image and generating the icon at build time.
+- The license text is included at `licenses/pillow-LICENSE`.
+
+## six
+
+- Upstream: <https://github.com/benjaminp/six>
+- License: MIT
+- Purpose: dependency of pystray.
 
 Full license texts for the Python runtime and its bundled libraries are shipped
 with the Python distribution and remain available from the upstream projects

@@ -1,10 +1,10 @@
-﻿[build-system]
+[build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ryzen-temp-limit"
-version = "0.3.1"
+version = "0.3.2"
 description = "Small Windows GUI to cap AMD Ryzen CPU temperature via PawnIO"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,7 +19,12 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Topic :: System :: Hardware",
 ]
-dependencies = ["zenmaster>=1.2.1,<2.0", "certifi>=2024.2.2"]
+dependencies = [
+  "zenmaster>=1.2.1,<2.0",
+  "certifi>=2024.2.2",
+  "pystray>=0.19.5",
+  "pillow>=10.0",
+]
 
 [project.optional-dependencies]
 dev = ["pyinstaller>=6.0", "pillow>=10.0"]
@@ -44,4 +49,5 @@ packages = ["ryzen_temp_limit"]
 
 [tool.setuptools.package-data]
 ryzen_temp_limit = ["assets/*.ico", "assets/*.png"]
+
 

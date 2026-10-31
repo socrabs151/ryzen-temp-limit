@@ -17,6 +17,7 @@ class Settings:
     temp: int = DEFAULT_TEMP
     interval_min: int = DEFAULT_INTERVAL_MIN
     autostart: bool = False
+    close_to_tray: bool = True
     skipped_version: str = ""
     original_limit: int | None = None
 
@@ -32,6 +33,7 @@ class Settings:
             temp=temp,
             interval_min=interval,
             autostart=bool(self.autostart),
+            close_to_tray=bool(self.close_to_tray),
             skipped_version=skipped,
             original_limit=original,
         )
@@ -112,6 +114,7 @@ def load() -> Settings:
         temp=raw.get("temp", DEFAULT_TEMP),
         interval_min=raw.get("interval_min", DEFAULT_INTERVAL_MIN),
         autostart=raw.get("autostart", False),
+        close_to_tray=raw.get("close_to_tray", True),
         skipped_version=raw.get("skipped_version", ""),
         original_limit=raw.get("original_limit"),
     ).normalized()

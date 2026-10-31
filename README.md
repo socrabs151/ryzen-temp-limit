@@ -29,6 +29,7 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
   and can download, verify and install a new release by itself.
 - Single-instance guard, per-user settings, About dialog with licenses and a
   one-click diagnostics copy.
+- Notification-area icon with quick actions and an optional close-to-tray.
 - No WinRing0, no unsigned drivers, no kernel patch.
 
 ## Requirements
@@ -76,6 +77,9 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
   the button says so and falls back to 95 °C. To capture the firmware default,
   pause the task, reboot, then start the app.
 - Untick the checkbox to remove the task.
+- The tray icon offers **Show window**, **Apply limit**, **Restore**, **Pause**,
+  **Check for updates** and **Exit**. With **Close window to tray** enabled,
+  closing the window hides it instead of quitting.
 
 The temperature ceiling is *volatile*: the SMU forgets it on reboot, resume
 and sometimes on firmware resets. That is why a background task exists at all —

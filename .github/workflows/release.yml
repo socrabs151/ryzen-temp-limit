@@ -54,6 +54,7 @@ jobs:
 
           Copy-Item LICENSE release/LICENSE -Force
           Copy-Item THIRD_PARTY_NOTICES.md release/THIRD_PARTY_NOTICES.md -Force
+          Compress-Archive -Path licenses/* -DestinationPath release/licenses.zip -Force
 
       - name: Publish release
         shell: pwsh
@@ -66,5 +67,6 @@ jobs:
             release/sha256sums.txt `
             release/LICENSE `
             release/THIRD_PARTY_NOTICES.md `
+            release/licenses.zip `
             --title "${{ github.ref_name }}" `
             --generate-notes

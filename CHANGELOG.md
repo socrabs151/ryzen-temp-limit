@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+- Notification-area icon with quick actions (show, apply, restore, pause,
+  check for updates, exit).
+- "Close window to tray" option.
+- pystray and Pillow are now runtime dependencies; license texts are shipped
+  in `licenses/`.
+
 ## 0.3.1
 
 - Temperature history graph for the last 60 seconds.
