@@ -22,6 +22,8 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
 - Read-back of the limit actually stored in the SMU.
 - Optional background scheduled task that keeps the limit applied:
   at boot, after resume from sleep and every N minutes.
+- Update checker: asks GitHub on start, shows installed and latest versions,
+  and can download, verify and install a new release by itself.
 - No WinRing0, no unsigned drivers, no kernel patch.
 
 ## Requirements
@@ -67,6 +69,30 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
 The temperature ceiling is *volatile*: the SMU forgets it on reboot, resume
 and sometimes on firmware resets. That is why a background task exists at all —
 any tool that changes `--tctl-temp` has the same limitation.
+
+## Updates
+
+On start the app asks GitHub for the latest release. If a newer version exists,
+it offers to update. The bottom bar also has a **Check for updates** button and
+shows the installed and the latest known version.
+
+Packaged builds download the new release, verify its SHA-256 checksum, replace
+their own files after the process exits and restart. A source checkout opens
+the release page instead.
+
+Releases are produced from tags by `.github/workflows/release.yml`:
+
+```text
+v0.2.0
+├── RyzenTempLimit-win64.zip      (onedir build, fast start)
+├── RyzenTempLimit-onefile.exe    (single file)
+├── sha256sums.txt
+└── source archives (added by GitHub)
+```
+
+The workflow refuses to publish if the tag and `ryzen_temp_limit.__version__`
+differ. To ship a new version, bump the version, commit, then push a matching
+`vX.Y.Z` tag.
 
 ## Build a standalone executable
 

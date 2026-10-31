@@ -3,14 +3,17 @@
 import argparse
 import ctypes
 import os
+import queue
 import sys
+import threading
 import time
 import tkinter as tk
 import webbrowser
-from tkinter import ttk
+from dataclasses import replace
+from tkinter import messagebox, ttk
 
 from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__
-from . import autostart, core
+from . import autostart, core, updater
 from . import settings as settings_mod
 from .elevation import is_admin, message_box, relaunch_as_admin
 from .settings import Settings
@@ -72,6 +75,11 @@ class App(tk.Tk):
         self.live = core.Live()
         self._live_errors = 0
         self._syncing = False
+        self.skipped_version = settings.skipped_version
+        self.update_release: updater.Release | None = None
+        self._checking = False
+        self._updating = False
+        self._events: queue.Queue = queue.Queue()
 
         self.title(APP_NAME)
         self.minsize(600, 640)
@@ -94,6 +102,7 @@ class App(tk.Tk):
         self.load_var = tk.StringVar(value="—")
         self.power_var = tk.StringVar(value="—")
         self.gfx_var = tk.StringVar(value="—")
+        self.latest_var = tk.StringVar(value="Latest: —")
 
         self._setup_style()
         self._build()
@@ -102,7 +111,9 @@ class App(tk.Tk):
         self.bind("<Return>", lambda _event: self._apply())
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(60, self._startup)
+        self.after(100, self._drain_events)
         self.after(400, self._poll)
+        self.after(1500, lambda: self._check_updates(manual=False))
 
     def _setup_style(self) -> None:
         style = ttk.Style(self)
@@ -139,6 +150,7 @@ class App(tk.Tk):
         self._build_background(outer)
         self._build_activity(outer)
         self._build_footer(outer)
+        self._build_bottom_bar(outer)
 
     def _build_temperature(self, parent: tk.Misc) -> None:
         group = ttk.LabelFrame(parent, text="Temperature limit", padding=10)
@@ -254,6 +266,17 @@ class App(tk.Tk):
 
         self.status_label = ttk.Label(footer, textvariable=self.status_var, style="Hint.TLabel")
         self.status_label.pack(side="right")
+
+    def _build_bottom_bar(self, parent: tk.Misc) -> None:
+        ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=(8, 0))
+        bar = ttk.Frame(parent)
+        bar.pack(fill="x", pady=(6, 0))
+
+        ttk.Label(bar, text=f"Version {__version__}", style="Hint.TLabel").pack(side="left")
+        self.update_button = ttk.Button(bar, text="Check for updates", command=self._on_update_button)
+        self.update_button.pack(side="left", padx=(10, 0))
+        ttk.Label(bar, textvariable=self.latest_var, style="Hint.TLabel").pack(side="left", padx=(10, 0))
+        ttk.Label(bar, text="GPL-3.0", style="Hint.TLabel").pack(side="right")
 
     def _startup(self) -> None:
         if autostart.task_exists():
@@ -427,6 +450,7 @@ class App(tk.Tk):
             temp=self._target(),
             interval_min=self._interval(),
             autostart=bool(self.autostart_var.get()),
+            skipped_version=self.skipped_version,
         ).normalized()
 
     def _save(self) -> None:
@@ -455,6 +479,137 @@ class App(tk.Tk):
             self.log_text.delete("1.0", "60.0")
         self.log_text.see("end")
         self.log_text.configure(state="disabled")
+
+    def _post(self, callback, *args) -> None:
+        self._events.put((callback, args))
+
+    def _drain_events(self) -> None:
+        try:
+            while True:
+                callback, args = self._events.get_nowait()
+                try:
+                    callback(*args)
+                except Exception:
+                    core.log.exception("update callback failed")
+        except queue.Empty:
+            pass
+        try:
+            self.after(100, self._drain_events)
+        except tk.TclError:
+            pass
+
+    def _check_updates(self, manual: bool = False) -> None:
+        if self._updating or self._checking:
+            if manual:
+                self._status("Already checking for updates")
+            return
+        self._checking = True
+        if manual:
+            self._status("Checking for updates…")
+        threading.Thread(target=self._check_worker, args=(manual,), daemon=True).start()
+
+    def _check_worker(self, manual: bool) -> None:
+        try:
+            release = updater.fetch_latest()
+        except updater.NoReleases:
+            self._post(self._on_no_releases, manual)
+            return
+        except Exception as exc:
+            core.log.info("update check failed: %s", exc)
+            self._post(self._on_check_failed, str(exc), manual)
+            return
+        self._post(self._on_check_done, release, manual)
+
+    def _on_no_releases(self, manual: bool) -> None:
+        self._checking = False
+        self.latest_var.set("Latest: —")
+        if manual:
+            messagebox.showinfo(APP_NAME, "No releases have been published yet.")
+
+    def _on_check_done(self, release: updater.Release, manual: bool) -> None:
+        self._checking = False
+        self.latest_var.set(f"Latest: {release.version}")
+        if updater.is_newer(release.version, __version__):
+            self.update_release = release
+            self.update_button.configure(text=f"Update to {release.version}")
+            if manual or release.version != self.skipped_version:
+                self._prompt_update(release, manual=manual)
+        elif manual:
+            messagebox.showinfo(APP_NAME, f"You are running the latest version ({__version__}).")
+
+    def _on_check_failed(self, message: str, manual: bool) -> None:
+        self._checking = False
+        self.latest_var.set("Latest: —")
+        self._log(f"Update check failed: {message}", "muted")
+        if manual:
+            messagebox.showerror(APP_NAME, f"Could not check for updates:\n{message}")
+
+    def _on_update_button(self) -> None:
+        release = self.update_release
+        if release and updater.is_newer(release.version, __version__):
+            self._prompt_update(release, manual=True)
+        else:
+            self._check_updates(manual=True)
+
+    def _prompt_update(self, release: updater.Release, manual: bool) -> None:
+        if updater.frozen_mode() is None:
+            question = (
+                f"Version {release.version} is available (you have {__version__}).\n\n"
+                "This is a source checkout, so open the release page instead?"
+            )
+            if messagebox.askyesno(APP_NAME, question):
+                webbrowser.open(release.page_url)
+            return
+
+        question = (
+            f"Version {release.version} is available (you have {__version__}).\n\n"
+            "Download and install it now? The application will restart."
+        )
+        if messagebox.askyesno(APP_NAME, question):
+            self._start_update(release)
+        elif not manual:
+            self._remember_skipped(release.version)
+
+    def _remember_skipped(self, version: str) -> None:
+        self.skipped_version = version
+        self.settings = replace(self._collect(), skipped_version=version)
+        try:
+            settings_mod.save(self.settings)
+        except OSError:
+            pass
+
+    def _start_update(self, release: updater.Release) -> None:
+        if self._updating:
+            return
+        self._updating = True
+        self.update_button.configure(state="disabled")
+        self._status("Downloading update…")
+        self._log(f"Downloading update {release.version}…", "muted")
+        threading.Thread(target=self._update_worker, args=(release,), daemon=True).start()
+
+    def _update_worker(self, release: updater.Release) -> None:
+        try:
+            updater.install(release, progress=lambda fraction: self._post(self._on_progress, fraction))
+        except Exception as exc:
+            core.log.error("update failed: %s", exc)
+            self._post(self._on_update_failed, str(exc))
+            return
+        self._post(self._on_update_ready)
+
+    def _on_progress(self, fraction: float) -> None:
+        self._status(f"Downloading update… {fraction * 100:.0f}%")
+
+    def _on_update_ready(self) -> None:
+        self._status("Restarting to finish the update…")
+        self._log("Update downloaded. Restarting…", "ok")
+        self.after(500, self.destroy)
+
+    def _on_update_failed(self, message: str) -> None:
+        self._updating = False
+        self.update_button.configure(state="normal")
+        self._log(f"Update failed: {message}", "err")
+        self._status("Update failed", error=True)
+        messagebox.showerror(APP_NAME, f"Update failed:\n{message}")
 
     def _on_close(self) -> None:
         self._save()

@@ -17,11 +17,19 @@ class Settings:
     temp: int = DEFAULT_TEMP
     interval_min: int = DEFAULT_INTERVAL_MIN
     autostart: bool = False
+    skipped_version: str = ""
 
     def normalized(self) -> "Settings":
         temp = max(MIN_TEMP, min(MAX_TEMP, int(self.temp)))
         interval = max(1, min(120, int(self.interval_min)))
-        return replace(self, temp=temp, interval_min=interval, autostart=bool(self.autostart))
+        skipped = str(self.skipped_version or "").strip()
+        return replace(
+            self,
+            temp=temp,
+            interval_min=interval,
+            autostart=bool(self.autostart),
+            skipped_version=skipped,
+        )
 
 
 def data_dir() -> Path:
@@ -71,6 +79,7 @@ def load() -> Settings:
         temp=raw.get("temp", DEFAULT_TEMP),
         interval_min=raw.get("interval_min", DEFAULT_INTERVAL_MIN),
         autostart=raw.get("autostart", False),
+        skipped_version=raw.get("skipped_version", ""),
     ).normalized()
 
 

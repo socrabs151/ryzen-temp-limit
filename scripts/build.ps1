@@ -25,6 +25,7 @@ try {
         --icon ryzen_temp_limit\assets\icon.ico `
         --collect-data zenmaster `
         --collect-submodules zenmaster `
+        --collect-data certifi `
         --add-data "ryzen_temp_limit\assets;ryzen_temp_limit\assets" `
         run.py
 
