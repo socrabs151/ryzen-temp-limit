@@ -1,6 +1,6 @@
 """Ryzen Temp Limit - cap AMD Ryzen CPU temperature from a tiny Windows GUI."""
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 APP_NAME = "Ryzen Temp Limit"
 TASK_NAME = "RyzenTempLimit"
 MIN_TEMP = 50

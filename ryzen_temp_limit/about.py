@@ -36,6 +36,7 @@ def show_about(parent: tk.Tk, app) -> None:
     window.transient(parent)
     window.resizable(False, False)
     window.grab_set()
+    window.bind("<Escape>", lambda _event: window.destroy())
 
     frame = ttk.Frame(window, padding=16)
     frame.pack(fill="both", expand=True)
@@ -56,6 +57,18 @@ def show_about(parent: tk.Tk, app) -> None:
     for index, (label, value) in enumerate(rows, start=4):
         ttk.Label(frame, text=f"{label}:").grid(row=index, column=0, sticky="w", padx=(0, 16))
         ttk.Label(frame, text=value).grid(row=index, column=1, sticky="w")
+
+    skipped_row = ttk.Frame(frame)
+    skipped_row.grid(row=9, column=0, columnspan=2, sticky="w", pady=(8, 0))
+    ttk.Label(skipped_row, text="Skipped update:").pack(side="left")
+    skipped_var = tk.StringVar(value=app.skipped_version or "none")
+    ttk.Label(skipped_row, textvariable=skipped_var).pack(side="left", padx=(8, 0))
+
+    def clear_skipped() -> None:
+        app._clear_skipped_version()
+        skipped_var.set("none")
+
+    ttk.Button(skipped_row, text="Clear", command=clear_skipped).pack(side="left", padx=(8, 0))
 
     ttk.Separator(frame).grid(row=11, column=0, columnspan=2, sticky="ew", pady=(12, 8))
 
@@ -82,6 +95,12 @@ def show_about(parent: tk.Tk, app) -> None:
         text="Copy diagnostics",
         command=lambda: _copy(app),
     ).pack(side="right", padx=(0, 8))
+    ttk.Button(buttons, text="Open data folder", command=app._open_data_folder).pack(side="left")
+    ttk.Button(
+        buttons,
+        text="Reset settings",
+        command=lambda: _reset(window, app),
+    ).pack(side="left", padx=(8, 0))
 
     window.update_idletasks()
     width = window.winfo_width()
@@ -91,7 +110,17 @@ def show_about(parent: tk.Tk, app) -> None:
     window.geometry(f"+{max(0, x)}+{max(0, y)}")
 
 
+def _reset(window, app) -> None:
+    if messagebox.askyesno(
+        "Reset settings",
+        "Reset temperature, interval, skipped update and the captured limit?",
+        parent=window,
+    ):
+        app._reset_settings()
+
+
 def _copy(app) -> None:
     if app._copy_diagnostics():
         messagebox.showinfo(APP_NAME, "Diagnostics copied to the clipboard.", parent=app)
+
 

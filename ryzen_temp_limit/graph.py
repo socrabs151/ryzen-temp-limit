@@ -13,7 +13,7 @@ TEXT_COLOR = "#888888"
 class TemperatureGraph(tk.Canvas):
     def __init__(self, master: tk.Misc, height: int = 96) -> None:
         super().__init__(
-            master, height=height, background="#ffffff",
+            master, height=height, background="#ffffff", takefocus=0,
             highlightthickness=1, highlightbackground="#c8c8c8",
         )
         self._samples: deque[tuple[float, float]] = deque()
@@ -95,5 +95,6 @@ class TemperatureGraph(tk.Canvas):
 
         self.create_text(left, bottom + 12, text="60 s", anchor="w", fill=TEXT_COLOR, font=("Segoe UI", 7))
         self.create_text(right, bottom + 12, text="now", anchor="e", fill=TEXT_COLOR, font=("Segoe UI", 7))
+
 
 

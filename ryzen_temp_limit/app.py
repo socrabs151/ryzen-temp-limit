@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import ctypes
@@ -15,12 +15,12 @@ from dataclasses import replace
 from datetime import datetime
 from tkinter import messagebox, ttk
 
-from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__, about, autostart, core, updater
+from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__, about, autostart, core, update_ui, updater
 from . import settings as settings_mod
 from .elevation import is_admin, message_box, relaunch_as_admin
 from .graph import TemperatureGraph
 from .settings import Settings
-from .single_instance import SingleInstance
+from .single_instance import ActivationServer, SingleInstance, signal_activation
 from .tray import Tray
 
 PAWNIO_URL = "https://github.com/namazso/PawnIO.Setup/releases/latest"
@@ -117,8 +117,11 @@ class App(tk.Tk):
         self._update_restore_button()
         self._fit_to_content()
         self.tray = Tray(self, _asset("icon.png"))
+        self.activation = ActivationServer(lambda: self._post(self._show_window))
+        self.activation.start()
         self.temp_var.trace_add("write", self._on_temp_changed)
         self.bind("<Return>", lambda _event: self._apply())
+        self.bind("<Control-q>", lambda _event: self._quit())
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(60, self._startup)
         self.after(100, self._drain_events)
@@ -280,7 +283,7 @@ class App(tk.Tk):
 
         self.log_text = tk.Text(
             group, height=4, wrap="word", font=MONO, state="disabled",
-            relief="solid", borderwidth=1, highlightthickness=0,
+            relief="solid", borderwidth=1, highlightthickness=0, takefocus=False,
             padx=6, pady=4, background="#ffffff", foreground="#333333",
         )
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -312,6 +315,7 @@ class App(tk.Tk):
         self.update_button = ttk.Button(bar, text="Check for updates", command=self._on_update_button)
         self.update_button.pack(side="left", padx=(10, 0))
         ttk.Label(bar, textvariable=self.latest_var, style="Hint.TLabel").pack(side="left", padx=(10, 0))
+        self.progress = ttk.Progressbar(bar, mode="determinate", maximum=100, length=120)
         ttk.Label(bar, text="GPL-3.0", style="Hint.TLabel").pack(side="right")
         ttk.Button(bar, text="About", command=lambda: about.show_about(self, self)).pack(
             side="right", padx=(0, 10)
@@ -434,6 +438,12 @@ class App(tk.Tk):
             self._status(f"Enter a number between {MIN_TEMP} and {MAX_TEMP}", error=True)
             return
         temp = max(MIN_TEMP, min(MAX_TEMP, value))
+        if not initial and temp < 60 and not messagebox.askyesno(
+            APP_NAME,
+            f"{temp} °C is a very low limit and will cause heavy throttling. Apply anyway?",
+            parent=self,
+        ):
+            return
         self.temp_var.set(temp)
         self.settings = self._collect()
         settings_mod.save(self.settings)
@@ -721,7 +731,7 @@ class App(tk.Tk):
             self.update_release = release
             self.update_button.configure(text=f"Update to {release.version}")
             if manual or release.version != self.skipped_version:
-                self._prompt_update(release, manual=manual)
+                self._prompt_update(release)
         elif manual:
             messagebox.showinfo(APP_NAME, f"You are running the latest version ({__version__}).")
 
@@ -735,28 +745,12 @@ class App(tk.Tk):
     def _on_update_button(self) -> None:
         release = self.update_release
         if release and updater.is_newer(release.version, __version__):
-            self._prompt_update(release, manual=True)
+            self._prompt_update(release)
         else:
             self._check_updates(manual=True)
 
-    def _prompt_update(self, release: updater.Release, manual: bool) -> None:
-        if updater.frozen_mode() is None:
-            question = (
-                f"Version {release.version} is available (you have {__version__}).\n\n"
-                "This is a source checkout, so open the release page instead?"
-            )
-            if messagebox.askyesno(APP_NAME, question):
-                webbrowser.open(release.page_url)
-            return
-
-        question = (
-            f"Version {release.version} is available (you have {__version__}).\n\n"
-            "Download and install it now? The application will restart."
-        )
-        if messagebox.askyesno(APP_NAME, question):
-            self._start_update(release)
-        elif not manual:
-            self._remember_skipped(release.version)
+    def _prompt_update(self, release: updater.Release) -> None:
+        update_ui.show(self, self, release)
 
     def _remember_skipped(self, version: str) -> None:
         self.skipped_version = version
@@ -764,6 +758,44 @@ class App(tk.Tk):
         try:
             settings_mod.save(self.settings)
         except OSError:
+            pass
+        self._log(f"Version {version} will not be offered again", "muted")
+        self._status(f"Version {version} skipped")
+
+    def _clear_skipped_version(self) -> None:
+        if not self.skipped_version:
+            return
+        self.skipped_version = ""
+        self.settings = replace(self._collect(), skipped_version="")
+        try:
+            settings_mod.save(self.settings)
+        except OSError:
+            pass
+        self._log("Skipped update cleared", "muted")
+        self._status("Skipped update cleared")
+
+    def _reset_settings(self) -> None:
+        keep_autostart = bool(self.autostart_var.get())
+        self.skipped_version = ""
+        self.settings = Settings(autostart=keep_autostart)
+        try:
+            settings_mod.save(self.settings)
+        except OSError:
+            pass
+        self.temp_var.set(self.settings.temp)
+        self.scale_var.set(float(self.settings.temp))
+        self.interval_var.set(f"{self.settings.interval_min} min")
+        self.close_to_tray_var.set(self.settings.close_to_tray)
+        self._update_restore_button()
+        self._log("Settings reset to defaults", "muted")
+        self._status("Settings reset")
+        if keep_autostart:
+            self._install_task(silent=True)
+
+    def _open_data_folder(self) -> None:
+        try:
+            os.startfile(str(settings_mod.data_dir()))  # type: ignore[attr-defined]
+        except Exception:
             pass
 
     def _start_update(self, release: updater.Release) -> None:
@@ -794,6 +826,7 @@ class App(tk.Tk):
 
     def _on_update_failed(self, message: str) -> None:
         self._updating = False
+        self.progress.pack_forget()
         self.update_button.configure(state="normal")
         self._log(f"Update failed: {message}", "err")
         self._status("Update failed", error=True)
@@ -806,11 +839,14 @@ class App(tk.Tk):
             core.log.info("tray icon unavailable")
             self.close_to_tray_var.set(False)
 
+    def _show_window(self) -> None:
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
     def _tray_action(self, name: str) -> None:
         if name == "show":
-            self.deiconify()
-            self.lift()
-            self.focus_force()
+            self._show_window()
         elif name == "apply":
             self._apply()
         elif name == "restore":
@@ -825,6 +861,7 @@ class App(tk.Tk):
     def _quit(self) -> None:
         self._save()
         self.tray.stop()
+        self.activation.stop()
         self.destroy()
 
     def _on_close(self) -> None:
@@ -863,7 +900,8 @@ def main(argv: list[str] | None = None) -> int:
 
     guard = SingleInstance()
     if guard.already_running:
-        message_box(APP_NAME, "Ryzen Temp Limit is already running. Use the tray icon to open it.")
+        if not signal_activation():
+            message_box(APP_NAME, "Ryzen Temp Limit is already running. Use the tray icon to open it.")
         return 0
 
     current = settings_mod.load()
@@ -875,5 +913,9 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+
+
 
 

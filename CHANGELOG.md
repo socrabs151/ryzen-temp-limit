@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.4
+
+- Executable metadata (product, version, company, copyright) for both builds.
+- Update dialog with release notes, a download progress bar and a
+  "skip this version" action; skipped versions can be cleared in About.
+- A second launch now brings the existing window to the front.
+- Reset settings, a confirmation for limits below 60 °C, an "Open data folder"
+  action and keyboard shortcuts (Enter applies, Ctrl+Q quits).
+- CI: mypy type checking, release notes generated from the changelog, SBOM,
+  build provenance attestations and pip caching.
+
 ## 0.3.3
 
 - Fixed the self-updater failing with a `KeyError` while rendering the

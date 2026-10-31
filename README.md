@@ -1,4 +1,4 @@
-# Ryzen Temp Limit
+﻿# Ryzen Temp Limit
 
 A small Windows GUI that caps the temperature of AMD Ryzen CPUs (desktops and
 laptops) by writing the SMU thermal limit through the signed **PawnIO** driver.
@@ -27,8 +27,10 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
   back to 95 °C when it was never captured) and pause the automatic re-apply.
 - Update checker: asks GitHub on start, shows installed and latest versions,
   and can download, verify and install a new release by itself.
-- Single-instance guard, per-user settings, About dialog with licenses and a
-  one-click diagnostics copy.
+- Single-instance guard: a second launch brings the existing window to the front.
+- Per-user settings, About dialog with licenses, diagnostics, reset and an
+  "Open data folder" action.
+- Update dialog with release notes, download progress and "skip this version".
 - Notification-area icon with quick actions and an optional close-to-tray.
 - No WinRing0, no unsigned drivers, no kernel patch.
 
@@ -77,6 +79,7 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
   the button says so and falls back to 95 °C. To capture the firmware default,
   pause the task, reboot, then start the app.
 - Untick the checkbox to remove the task.
+- **Keyboard:** Tab/Shift+Tab move between controls, Enter applies, Ctrl+Q quits.
 - The tray icon offers **Show window**, **Apply limit**, **Restore**, **Pause**,
   **Check for updates** and **Exit**. With **Close window to tray** enabled,
   closing the window hides it instead of quitting.
@@ -193,3 +196,4 @@ available).
 
 Third-party components and their licenses are listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
