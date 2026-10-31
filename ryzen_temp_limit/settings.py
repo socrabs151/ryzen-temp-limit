@@ -32,6 +32,10 @@ class Settings:
         )
 
 
+def _folder(base: str) -> Path:
+    return Path(base) / APP_NAME.replace(" ", "")
+
+
 def data_dir() -> Path:
     override = os.environ.get("RYZEN_TEMP_LIMIT_DIR")
     if override:
@@ -41,12 +45,13 @@ def data_dir() -> Path:
 
     candidates: list[Path] = []
     if platform.system() == "Windows":
-        base = os.environ.get("PROGRAMDATA") or os.environ.get("APPDATA")
-        if base:
-            candidates.append(Path(base) / APP_NAME.replace(" ", ""))
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            candidates.append(Path(appdata) / APP_NAME.replace(" ", ""))
+        for variable in ("LOCALAPPDATA", "APPDATA"):
+            base = os.environ.get(variable)
+            if base:
+                candidates.append(_folder(base))
+        programdata = os.environ.get("PROGRAMDATA")
+        if programdata:
+            candidates.append(_folder(programdata))
     else:
         candidates.append(Path.home() / ".config" / APP_NAME.replace(" ", "").lower())
     candidates.append(Path(tempfile.gettempdir()) / APP_NAME.replace(" ", ""))
@@ -67,8 +72,29 @@ def config_path() -> Path:
     return data_dir() / CONFIG_FILE
 
 
+def legacy_data_dir() -> Path | None:
+    base = os.environ.get("PROGRAMDATA")
+    return _folder(base) if base else None
+
+
+def _migrate_legacy(target: Path) -> None:
+    legacy_dir = legacy_data_dir()
+    if legacy_dir is None:
+        return
+    legacy = legacy_dir / CONFIG_FILE
+    if legacy == target or not legacy.is_file():
+        return
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(legacy.read_bytes())
+    except OSError:
+        pass
+
+
 def load() -> Settings:
     path = config_path()
+    if not path.is_file():
+        _migrate_legacy(path)
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):

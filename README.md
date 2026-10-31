@@ -133,10 +133,13 @@ machine, and a manual launch still asks for administrator rights (UAC).
 
 ## Where data lives
 
-- Settings: `%ProgramData%\RyzenTempLimit\settings.json`
-- Log: `%ProgramData%\RyzenTempLimit\app.log`
+- Settings: `%LOCALAPPDATA%\RyzenTempLimit\settings.json`
+- Log: `%LOCALAPPDATA%\RyzenTempLimit\app.log`
 - Downloaded updates: `%LOCALAPPDATA%\RyzenTempLimit\update`
 - Scheduled task: `RyzenTempLimit` (current user, highest privileges)
+
+Settings from the old `%ProgramData%\RyzenTempLimit` location are migrated
+automatically on first start.
 
 ## Uninstall
 
