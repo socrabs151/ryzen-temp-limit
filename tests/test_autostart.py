@@ -27,5 +27,24 @@ class TaskXmlTests(unittest.TestCase):
         self.assertIn("<Interval>PT1M</Interval>", xml)
 
 
+class TaskInfoTests(unittest.TestCase):
+    def test_parse_installed(self) -> None:
+        info = autostart.parse_task_info(
+            '{"installed":true,"state":"Ready","lastRun":"2026-11-01 00:41:48",'
+            '"lastResult":0,"nextRun":"2026-11-01 00:46:47"}'
+        )
+        self.assertTrue(info.installed)
+        self.assertEqual(info.state, "Ready")
+        self.assertEqual(info.last_run, "2026-11-01 00:41:48")
+        self.assertEqual(info.last_result, 0)
+        self.assertEqual(info.next_run, "2026-11-01 00:46:47")
+
+    def test_parse_not_installed(self) -> None:
+        self.assertFalse(autostart.parse_task_info('{"installed":false}').installed)
+
+    def test_parse_garbage(self) -> None:
+        self.assertFalse(autostart.parse_task_info("not json").installed)
+
+
 if __name__ == "__main__":
     unittest.main()

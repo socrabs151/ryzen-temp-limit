@@ -12,6 +12,7 @@ import time
 import tkinter as tk
 import webbrowser
 from dataclasses import replace
+from datetime import datetime
 from tkinter import messagebox, ttk
 
 from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__, about, autostart, core, updater
@@ -117,6 +118,7 @@ class App(tk.Tk):
         self.after(60, self._startup)
         self.after(100, self._drain_events)
         self.after(400, self._poll)
+        self.after(2500, self._task_status_loop)
         self.after(1500, lambda: self._check_updates(manual=False))
 
     def _setup_style(self) -> None:
@@ -235,6 +237,13 @@ class App(tk.Tk):
         ttk.Button(row, text="Run now", command=self._run_now).pack(side="left", padx=(10, 0))
         self.pause_button = ttk.Button(row, text="Pause", command=self._pause)
         self.pause_button.pack(side="left", padx=(8, 0))
+
+        status_row = ttk.Frame(group)
+        status_row.pack(fill="x", pady=(6, 0))
+        self.task_var = tk.StringVar(value="Task: checking…")
+        ttk.Label(status_row, textvariable=self.task_var, style="Hint.TLabel").pack(side="left")
+        self.repair_button = ttk.Button(status_row, text="Repair task", command=self._repair_task)
+        self.repair_button.pack(side="right")
 
         ttk.Label(
             group,
@@ -424,6 +433,7 @@ class App(tk.Tk):
             self._status("Background task removed")
         self._update_pause_state()
         self._save()
+        self._refresh_task_status()
 
     def _on_interval(self) -> None:
         if self.autostart_var.get():
@@ -445,6 +455,7 @@ class App(tk.Tk):
                 self.autostart_var.set(False)
         self._update_pause_state()
         self._save()
+        self._refresh_task_status()
 
     def _run_now(self) -> None:
         if not autostart.task_exists():
@@ -467,9 +478,57 @@ class App(tk.Tk):
         self._status("Automatic re-apply paused")
         self._save()
         self._update_pause_state()
+        self._refresh_task_status()
 
     def _update_pause_state(self) -> None:
         self.pause_button.configure(state="normal" if self.autostart_var.get() else "disabled")
+
+    def _task_status_loop(self) -> None:
+        self._refresh_task_status()
+        self.after(300_000, self._task_status_loop)
+
+    def _refresh_task_status(self) -> None:
+        threading.Thread(target=self._task_status_worker, daemon=True).start()
+
+    def _task_status_worker(self) -> None:
+        try:
+            info = autostart.task_info()
+        except Exception:
+            info = autostart.TaskInfo(False)
+        self._post(self._on_task_status, info)
+
+    def _on_task_status(self, info: autostart.TaskInfo) -> None:
+        try:
+            if not self.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        if not info.installed:
+            self.task_var.set("Task: not installed")
+            self.repair_button.configure(state="disabled")
+            return
+        parts = [f"Task: {(info.state or 'ready').lower()}"]
+        if info.last_run:
+            parts.append(f"last {self._short_time(info.last_run)}")
+        if info.last_result is not None:
+            parts.append(f"result {info.last_result}")
+        if info.next_run:
+            parts.append(f"next {self._short_time(info.next_run)}")
+        self.task_var.set(" · ".join(parts))
+        self.repair_button.configure(state="normal" if self.autostart_var.get() else "disabled")
+
+    @staticmethod
+    def _short_time(value: str) -> str:
+        try:
+            moment = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return value
+        if moment.date() == datetime.now().date():
+            return moment.strftime("%H:%M:%S")
+        return moment.strftime("%d.%m %H:%M")
+
+    def _repair_task(self) -> None:
+        self._install_task()
 
     def _interval(self) -> int:
         try:
@@ -514,7 +573,7 @@ class App(tk.Tk):
             f"Python: {platform.python_version()}",
             f"Tk: {self.tk.call('info', 'patchlevel')}",
             f"settings: {self._collect()}",
-            f"task installed: {autostart.task_exists()}",
+            f"task: {autostart.task_info()}",
             f"task interval: {autostart.task_interval()}",
             "",
             "log:",

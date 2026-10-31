@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -77,6 +79,15 @@ TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
 """
 
 
+@dataclass(frozen=True)
+class TaskInfo:
+    installed: bool
+    state: str = ""
+    last_run: str = ""
+    last_result: int | None = None
+    next_run: str = ""
+
+
 def _flags() -> int:
     return getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
@@ -112,6 +123,54 @@ def task_exists() -> bool:
         creationflags=_flags(),
     )
     return result.returncode == 0
+
+
+def parse_task_info(text: str) -> TaskInfo:
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return TaskInfo(False)
+    if not isinstance(data, dict) or not data.get("installed"):
+        return TaskInfo(False)
+    try:
+        result = int(data["lastResult"]) if data.get("lastResult") is not None else None
+    except (TypeError, ValueError):
+        result = None
+    return TaskInfo(
+        installed=True,
+        state=str(data.get("state") or ""),
+        last_run=str(data.get("lastRun") or ""),
+        last_result=result,
+        next_run=str(data.get("nextRun") or ""),
+    )
+
+
+def task_info() -> TaskInfo:
+    if os.name != "nt":
+        return TaskInfo(False)
+    script = (
+        "$ErrorActionPreference='SilentlyContinue'; "
+        f"$t=Get-ScheduledTask -TaskName '{TASK_NAME}'; "
+        "if(-not $t){[pscustomobject]@{installed=$false}|ConvertTo-Json -Compress}"
+        "else{"
+        f"$i=Get-ScheduledTaskInfo -TaskName '{TASK_NAME}'; "
+        "[pscustomobject]@{installed=$true;state=[string]$t.State;"
+        "lastRun=if($i.LastRunTime){$i.LastRunTime.ToString('yyyy-MM-dd HH:mm:ss')}else{''};"
+        "lastResult=[int]$i.LastTaskResult;"
+        "nextRun=if($i.NextRunTime){$i.NextRunTime.ToString('yyyy-MM-dd HH:mm:ss')}else{''}}"
+        "|ConvertTo-Json -Compress}"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            check=False,
+            capture_output=True,
+            timeout=15,
+            creationflags=_flags(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return TaskInfo(False)
+    return parse_task_info(result.stdout.decode("utf-8", errors="replace"))
 
 
 def task_interval() -> int | None:
