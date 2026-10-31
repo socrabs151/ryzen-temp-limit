@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import importlib.metadata
 import platform
@@ -30,7 +30,7 @@ def _link(parent: tk.Misc, text: str, url: str, row: int, column: int) -> None:
     label.bind("<Button-1>", lambda _event: webbrowser.open(url))
 
 
-def show_about(parent: tk.Misc, app) -> None:
+def show_about(parent: tk.Tk, app) -> None:
     window = tk.Toplevel(parent)
     window.title(f"About {APP_NAME}")
     window.transient(parent)
@@ -94,3 +94,4 @@ def show_about(parent: tk.Misc, app) -> None:
 def _copy(app) -> None:
     if app._copy_diagnostics():
         messagebox.showinfo(APP_NAME, "Diagnostics copied to the clipboard.", parent=app)
+

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import time
 import tkinter as tk
@@ -75,8 +75,8 @@ class TemperatureGraph(tk.Canvas):
             degree += step
 
         target_y = y_of(float(self._target))
-        for x in range(left, right, 9):
-            self.create_line(x, target_y, min(x + 4, right), target_y, fill=LINE_COLOR)
+        for tick_x in range(left, right, 9):
+            self.create_line(tick_x, target_y, min(tick_x + 4, right), target_y, fill=LINE_COLOR)
         self.create_text(
             right - 2, target_y - 2, text=f"{self._target} °C", anchor="se",
             fill=LINE_COLOR, font=("Segoe UI", 7),
@@ -90,9 +90,10 @@ class TemperatureGraph(tk.Canvas):
 
         if self._samples:
             moment, value = self._samples[-1]
-            x, y = x_of(moment), y_of(value)
-            self.create_oval(x - 3, y - 3, x + 3, y + 3, fill=LINE_COLOR, outline="")
+            last_x, last_y = x_of(moment), y_of(value)
+            self.create_oval(last_x - 3, last_y - 3, last_x + 3, last_y + 3, fill=LINE_COLOR, outline="")
 
         self.create_text(left, bottom + 12, text="60 s", anchor="w", fill=TEXT_COLOR, font=("Segoe UI", 7))
         self.create_text(right, bottom + 12, text="now", anchor="e", fill=TEXT_COLOR, font=("Segoe UI", 7))
+
 

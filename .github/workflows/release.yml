@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -16,6 +18,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
@@ -56,6 +60,23 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICES.md release/THIRD_PARTY_NOTICES.md -Force
           Compress-Archive -Path licenses/* -DestinationPath release/licenses.zip -Force
 
+      - name: Generate release notes
+        shell: pwsh
+        run: python scripts/release_notes.py "${{ github.ref_name }}" release/notes.md
+
+      - name: Generate SBOM
+        shell: pwsh
+        run: |
+          python -m pip install cyclonedx-bom
+          python -m cyclonedx_py environment -o release/sbom.cdx.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/RyzenTempLimit-win64.zip
+            release/RyzenTempLimit-onefile.exe
+
       - name: Publish release
         shell: pwsh
         env:
@@ -68,16 +89,6 @@ jobs:
             release/LICENSE `
             release/THIRD_PARTY_NOTICES.md `
             release/licenses.zip `
+            release/sbom.cdx.json `
             --title "${{ github.ref_name }}" `
-            --generate-notes
-
-      - name: Add code signing policy to the release notes
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "${{ github.ref_name }}"
-          $body = gh release view $tag --json body -q .body
-          $policy = "`n---`n**Code signing policy:** Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).`n"
-          ($body + $policy) | Out-File -FilePath release/notes.md -Encoding utf8
-          gh release edit $tag --notes-file release/notes.md
+            --notes-file release/notes.md

@@ -13,6 +13,9 @@ try {
     Write-Host "Generating icon..."
     & $Python scripts\make_icon.py
 
+    Write-Host "Generating version metadata..."
+    & $Python scripts\make_version_info.py
+
     $mode = @()
     if ($OneFile) { $mode += "--onefile" }
 
@@ -23,6 +26,7 @@ try {
         --windowed `
         --name RyzenTempLimit `
         --icon ryzen_temp_limit\assets\icon.ico `
+        --version-file build\version_info.txt `
         --collect-data zenmaster `
         --collect-submodules zenmaster `
         --collect-data certifi `
