@@ -1,0 +1,10 @@
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration">
+  <files>
+    <pe-file path="RyzenTempLimit.exe">
+      <product-name>Ryzen Temp Limit</product-name>
+    </pe-file>
+    <pe-file path="RyzenTempLimit-onefile.exe">
+      <product-name>Ryzen Temp Limit</product-name>
+    </pe-file>
+  </files>
+</artifact-configuration>

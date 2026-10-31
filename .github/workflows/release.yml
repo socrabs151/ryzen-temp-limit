@@ -70,3 +70,14 @@ jobs:
             release/licenses.zip `
             --title "${{ github.ref_name }}" `
             --generate-notes
+
+      - name: Add code signing policy to the release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $body = gh release view $tag --json body -q .body
+          $policy = "`n---`n**Code signing policy:** Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).`n"
+          ($body + $policy) | Out-File -FilePath release/notes.md -Encoding utf8
+          gh release edit $tag --notes-file release/notes.md

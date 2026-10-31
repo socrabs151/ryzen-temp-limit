@@ -173,6 +173,12 @@ automatically on first start.
 - The `zenmaster` package is a third-party project and is pinned below 2.0.
 - Not affiliated with AMD, HP, namazso or the ZenMaster authors.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+See [SIGNING.md](SIGNING.md) for the build and signing details.
+
 ## License
 
 GNU General Public License v3.0. See [LICENSE](LICENSE).
