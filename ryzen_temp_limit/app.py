@@ -2,7 +2,9 @@
 
 import argparse
 import ctypes
+import importlib.metadata
 import os
+import platform
 import queue
 import sys
 import threading
@@ -12,7 +14,7 @@ import webbrowser
 from dataclasses import replace
 from tkinter import messagebox, ttk
 
-from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__, autostart, core, updater
+from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__, about, autostart, core, updater
 from . import settings as settings_mod
 from .elevation import is_admin, message_box, relaunch_as_admin
 from .settings import Settings
@@ -277,6 +279,9 @@ class App(tk.Tk):
         self.update_button.pack(side="left", padx=(10, 0))
         ttk.Label(bar, textvariable=self.latest_var, style="Hint.TLabel").pack(side="left", padx=(10, 0))
         ttk.Label(bar, text="GPL-3.0", style="Hint.TLabel").pack(side="right")
+        ttk.Button(bar, text="About", command=lambda: about.show_about(self, self)).pack(
+            side="right", padx=(0, 10)
+        )
 
     def _startup(self) -> None:
         if autostart.task_exists():
@@ -465,6 +470,45 @@ class App(tk.Tk):
             os.startfile(core.log_path())  # type: ignore[attr-defined]
         except Exception:
             pass
+
+    def _zenmaster_version(self) -> str:
+        try:
+            return importlib.metadata.version("zenmaster")
+        except importlib.metadata.PackageNotFoundError:
+            return "not installed"
+
+    def _diagnostics_text(self) -> str:
+        lines = [
+            f"{APP_NAME} {__version__}",
+            f"CPU: {self.model_var.get()}",
+            f"PawnIO: {self.driver_var.get()}",
+            f"zenmaster: {self._zenmaster_version()}",
+            f"Python: {platform.python_version()}",
+            f"Tk: {self.tk.call('info', 'patchlevel')}",
+            f"settings: {self._collect()}",
+            f"task installed: {autostart.task_exists()}",
+            f"task interval: {autostart.task_interval()}",
+            "",
+            "log:",
+        ]
+        try:
+            tail = core.log_path()
+            with open(tail, encoding="utf-8", errors="replace") as stream:
+                lines.extend(stream.readlines()[-40:])
+        except OSError as exc:
+            lines.append(f"could not read the log: {exc}")
+        return "\n".join(line.rstrip("\n") for line in lines)
+
+    def _copy_diagnostics(self) -> bool:
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self._diagnostics_text())
+            self._status("Diagnostics copied to the clipboard")
+            self._log("Diagnostics copied to the clipboard", "muted")
+            return True
+        except tk.TclError as exc:
+            self._log(f"Could not copy diagnostics: {exc}", "err")
+            return False
 
     def _status(self, text: str, error: bool = False) -> None:
         self.status_var.set(text)
