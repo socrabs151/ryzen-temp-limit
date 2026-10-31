@@ -25,6 +25,7 @@ INTERVALS = [1, 5, 10, 15, 30]
 ERROR_COLOR = "#c42b1c"
 TEXT_COLOR = "#1a1a1a"
 HINT_COLOR = "#666666"
+RESTORE_TEMP = 95
 
 BODY = ("Segoe UI", 9)
 SMALL = ("Segoe UI", 8)
@@ -108,6 +109,7 @@ class App(tk.Tk):
 
         self._setup_style()
         self._build()
+        self._update_pause_state()
         self._fit_to_content()
         self.temp_var.trace_add("write", self._on_temp_changed)
         self.bind("<Return>", lambda _event: self._apply())
@@ -182,6 +184,9 @@ class App(tk.Tk):
         ttk.Label(row, text="°C").pack(side="left")
         self.apply_button = ttk.Button(row, text="Apply", command=self._apply)
         self.apply_button.pack(side="left", padx=(14, 0))
+        ttk.Button(row, text=f"Restore {RESTORE_TEMP} °C", command=self._restore).pack(
+            side="left", padx=(8, 0)
+        )
 
         ttk.Label(
             group, text="A lower limit reduces heat, but also sustained performance.",
@@ -228,6 +233,8 @@ class App(tk.Tk):
         self.interval_box.pack(side="left", padx=(6, 0))
         self.interval_box.bind("<<ComboboxSelected>>", lambda _event: self._on_interval())
         ttk.Button(row, text="Run now", command=self._run_now).pack(side="left", padx=(10, 0))
+        self.pause_button = ttk.Button(row, text="Pause", command=self._pause)
+        self.pause_button.pack(side="left", padx=(8, 0))
 
         ttk.Label(
             group,
@@ -291,6 +298,7 @@ class App(tk.Tk):
                 self.interval_var.set(f"{interval} min")
         else:
             self.autostart_var.set(False)
+        self._update_pause_state()
 
         try:
             info = core.cpu()
@@ -414,6 +422,7 @@ class App(tk.Tk):
             core.log.info("background task removed")
             self._log("Background task removed", "muted")
             self._status("Background task removed")
+        self._update_pause_state()
         self._save()
 
     def _on_interval(self) -> None:
@@ -434,6 +443,7 @@ class App(tk.Tk):
             self._status(f"Background task failed: {exc}", error=True)
             if not silent:
                 self.autostart_var.set(False)
+        self._update_pause_state()
         self._save()
 
     def _run_now(self) -> None:
@@ -442,6 +452,24 @@ class App(tk.Tk):
             return
         autostart.run_now()
         self._log("Background task started manually", "muted")
+
+    def _restore(self) -> None:
+        self.temp_var.set(RESTORE_TEMP)
+        self._apply()
+
+    def _pause(self) -> None:
+        if not self.autostart_var.get():
+            return
+        self.autostart_var.set(False)
+        autostart.remove()
+        core.log.info("automatic re-apply paused")
+        self._log("Automatic re-apply paused; the firmware resets the limit on reboot", "muted")
+        self._status("Automatic re-apply paused")
+        self._save()
+        self._update_pause_state()
+
+    def _update_pause_state(self) -> None:
+        self.pause_button.configure(state="normal" if self.autostart_var.get() else "disabled")
 
     def _interval(self) -> int:
         try:
