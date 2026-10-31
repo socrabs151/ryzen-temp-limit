@@ -12,8 +12,7 @@ import webbrowser
 from dataclasses import replace
 from tkinter import messagebox, ttk
 
-from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__
-from . import autostart, core, updater
+from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__, autostart, core, updater
 from . import settings as settings_mod
 from .elevation import is_admin, message_box, relaunch_as_admin
 from .settings import Settings
@@ -324,7 +323,7 @@ class App(tk.Tk):
             return
         self._syncing = True
         try:
-            self.temp_var.set(int(round(float(value))))
+            self.temp_var.set(round(float(value)))
         finally:
             self._syncing = False
 

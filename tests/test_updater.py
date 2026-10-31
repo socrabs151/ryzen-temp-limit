@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
 
 from ryzen_temp_limit import updater
 
@@ -52,6 +55,19 @@ class AssetTests(unittest.TestCase):
 
     def test_source_checkout_is_not_frozen(self) -> None:
         self.assertIsNone(updater.frozen_mode())
+
+    def test_update_root_uses_local_appdata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            previous = os.environ.get("LOCALAPPDATA")
+            os.environ["LOCALAPPDATA"] = temporary
+            try:
+                root = updater.update_root()
+            finally:
+                if previous is None:
+                    os.environ.pop("LOCALAPPDATA", None)
+                else:
+                    os.environ["LOCALAPPDATA"] = previous
+            self.assertEqual(root, Path(temporary) / "RyzenTempLimit" / "update")
 
 
 if __name__ == "__main__":

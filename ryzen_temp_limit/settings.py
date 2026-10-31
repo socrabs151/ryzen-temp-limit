@@ -19,7 +19,7 @@ class Settings:
     autostart: bool = False
     skipped_version: str = ""
 
-    def normalized(self) -> "Settings":
+    def normalized(self) -> Settings:
         temp = max(MIN_TEMP, min(MAX_TEMP, int(self.temp)))
         interval = max(1, min(120, int(self.interval_min)))
         skipped = str(self.skipped_version or "").strip()

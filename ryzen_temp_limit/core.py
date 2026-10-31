@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import platform
 import subprocess
 import sys
@@ -8,7 +9,6 @@ from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from typing import Any
 
-from . import APP_NAME
 from .settings import data_dir
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -55,7 +55,7 @@ def _run_quiet(args: list[str]) -> None:
     if IS_WINDOWS:
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
-        subprocess.run(args, capture_output=True, timeout=15, creationflags=flags)
+        subprocess.run(args, check=False, capture_output=True, timeout=15, creationflags=flags)
     except (OSError, subprocess.SubprocessError):
         pass
 
@@ -115,7 +115,7 @@ def _value(container: Any, name: str) -> float | None:
         value = float(value)
     except (TypeError, ValueError):
         return None
-    if value != value:
+    if math.isnan(value):
         return None
     return value
 

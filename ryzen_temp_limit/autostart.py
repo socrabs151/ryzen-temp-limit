@@ -107,6 +107,7 @@ def task_exists() -> bool:
         return False
     result = subprocess.run(
         ["schtasks", "/Query", "/TN", TASK_NAME],
+        check=False,
         capture_output=True,
         creationflags=_flags(),
     )
@@ -118,6 +119,7 @@ def task_interval() -> int | None:
         return None
     result = subprocess.run(
         ["schtasks", "/Query", "/TN", TASK_NAME, "/XML"],
+        check=False,
         capture_output=True,
         creationflags=_flags(),
     )
@@ -136,21 +138,26 @@ def task_interval() -> int | None:
     return int(match.group(1)) if match else None
 
 
-def install(settings: Settings) -> None:
-    if os.name != "nt":
-        raise OSError("Scheduled tasks are only supported on Windows")
+def build_xml(settings: Settings, user: str | None = None, start: str | None = None) -> str:
     command, arguments, workdir = _runner()
-    start = (datetime.now() - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S")
-    xml = TASK_XML.format(
+    if start is None:
+        start = (datetime.now() - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S")
+    return TASK_XML.format(
         description=escape(f"Keep AMD CPU temperature at {settings.temp} °C (Ryzen Temp Limit)"),
         task=TASK_NAME,
-        user=escape(_current_user()),
+        user=escape(user or _current_user()),
         interval=max(1, int(settings.interval_min)),
         start=start,
         command=escape(command),
         arguments=escape(arguments),
         workdir=escape(workdir),
     )
+
+
+def install(settings: Settings) -> None:
+    if os.name != "nt":
+        raise OSError("Scheduled tasks are only supported on Windows")
+    xml = build_xml(settings)
     handle, path = tempfile.mkstemp(suffix=".xml", prefix="ryzen-temp-limit-")
     try:
         with os.fdopen(handle, "w", encoding="utf-16") as stream:
@@ -175,6 +182,7 @@ def remove() -> None:
         return
     subprocess.run(
         ["schtasks", "/Delete", "/TN", TASK_NAME, "/F"],
+        check=False,
         capture_output=True,
         creationflags=_flags(),
     )
@@ -185,6 +193,7 @@ def run_now() -> None:
         return
     subprocess.run(
         ["schtasks", "/Run", "/TN", TASK_NAME],
+        check=False,
         capture_output=True,
         creationflags=_flags(),
     )
