@@ -23,7 +23,8 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
 - Optional background scheduled task that keeps the limit applied:
   at logon, after resume from sleep and every N minutes.
 - Task status line (last run, result, next run) and a repair button.
-- Restore 95 °C and pause the automatic re-apply without uninstalling.
+- Restore the original SMU limit (captured before the app took over; falls
+  back to 95 °C when it was never captured) and pause the automatic re-apply.
 - Update checker: asks GitHub on start, shows installed and latest versions,
   and can download, verify and install a new release by itself.
 - Single-instance guard, per-user settings, About dialog with licenses and a
@@ -66,8 +67,14 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
 
 - Set **Temperature limit** and press **Apply**.
 - Tick **Keep applied in the background** to install a scheduled task that
-  re-applies the limit automatically. The task runs as `SYSTEM`.
+  re-applies the limit automatically. The task runs as the current user.
 - **Run now** triggers the background task once.
+- **Pause** removes the background task; the current limit stays until reboot.
+- **Restore** applies the SMU limit that was present before the app first
+  managed it. That value is captured once, on a start where no background task
+  exists. If it was never captured (the app was already managing the limit),
+  the button says so and falls back to 95 °C. To capture the firmware default,
+  pause the task, reboot, then start the app.
 - Untick the checkbox to remove the task.
 
 The temperature ceiling is *volatile*: the SMU forgets it on reboot, resume

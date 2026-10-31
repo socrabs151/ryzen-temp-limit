@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Temperature history graph for the last 60 seconds.
+- Restore now applies the SMU limit captured before the app first managed it,
+  with a visible 95 °C fallback when no original value was recorded.
+
 ## 0.3.0
 
 - Settings moved to `%LOCALAPPDATA%\RyzenTempLimit` and migrated from the old
