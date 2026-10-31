@@ -21,6 +21,7 @@ from .elevation import is_admin, message_box, relaunch_as_admin
 from .graph import TemperatureGraph
 from .settings import Settings
 from .single_instance import ActivationServer, SingleInstance, signal_activation
+from .thermal import ThermalMonitor
 from .tray import Tray
 
 PAWNIO_URL = "https://github.com/namazso/PawnIO.Setup/releases/latest"
@@ -119,6 +120,7 @@ class App(tk.Tk):
         self.tray = Tray(self, _asset("icon.png"))
         self.activation = ActivationServer(lambda: self._post(self._show_window))
         self.activation.start()
+        self.thermal = ThermalMonitor()
         self.temp_var.trace_add("write", self._on_temp_changed)
         self.bind("<Return>", lambda _event: self._apply())
         self.bind("<Control-q>", lambda _event: self._quit())
@@ -430,6 +432,10 @@ class App(tk.Tk):
         else:
             self.graph.add(live.tctl)
         self.tray.update(live.tctl, self._target())
+        for event in self.thermal.update(live.tctl, live.limit, float(self._target())):
+            self._log(event.message, "err" if event.kind == "critical" else "muted")
+            self._status(event.message, error=True)
+            self.tray.notify("Ryzen Temp Limit", event.message)
 
     def _apply(self, initial: bool = False) -> None:
         try:
@@ -913,6 +919,7 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
 

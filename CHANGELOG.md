@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.5
+
+- Read-only thermal watchdog: warns when the SMU limit differs from the
+  requested value, when the CPU stays above the ceiling, or when it reaches
+  97 °C. It never changes the limit automatically.
+- Warnings appear in the status line, the activity log and the tray tooltip.
+
 ## 0.3.4
 
 - Executable metadata (product, version, company, copyright) for both builds.

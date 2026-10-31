@@ -32,6 +32,8 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
   "Open data folder" action.
 - Update dialog with release notes, download progress and "skip this version".
 - Notification-area icon with quick actions and an optional close-to-tray.
+- Read-only thermal watchdog: warns if the SMU limit differs from the requested
+  one or if the CPU stays above the ceiling (it never changes the limit).
 - No WinRing0, no unsigned drivers, no kernel patch.
 
 ## Requirements
@@ -169,6 +171,10 @@ The application has no telemetry; see [PRIVACY.md](PRIVACY.md).
 
 ## Notes and limitations
 
+The watchdog only reports problems. It does not lower or raise the limit by
+itself; a firmware that ignores the SMU command can only be detected, not fixed
+from user space.
+
 - Lower temperatures mean lower sustained performance. A limit well below the
   firmware default will throttle aggressively under load.
 - This is a software limit. It does not fix dust, a dried thermal paste or a
@@ -196,4 +202,5 @@ available).
 
 Third-party components and their licenses are listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 
