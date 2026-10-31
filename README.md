@@ -21,9 +21,13 @@ driver, together with [ZenMaster](https://github.com/HorizonUnix/ZenMaster)
 - Live readout of current Tctl, load, package power and iGPU clock.
 - Read-back of the limit actually stored in the SMU.
 - Optional background scheduled task that keeps the limit applied:
-  at boot, after resume from sleep and every N minutes.
+  at logon, after resume from sleep and every N minutes.
+- Task status line (last run, result, next run) and a repair button.
+- Restore 95 °C and pause the automatic re-apply without uninstalling.
 - Update checker: asks GitHub on start, shows installed and latest versions,
   and can download, verify and install a new release by itself.
+- Single-instance guard, per-user settings, About dialog with licenses and a
+  one-click diagnostics copy.
 - No WinRing0, no unsigned drivers, no kernel patch.
 
 ## Requirements
