@@ -18,6 +18,7 @@ from tkinter import messagebox, ttk
 from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__, about, autostart, core, updater
 from . import settings as settings_mod
 from .elevation import is_admin, message_box, relaunch_as_admin
+from .graph import TemperatureGraph
 from .settings import Settings
 from .single_instance import SingleInstance
 
@@ -153,6 +154,7 @@ class App(tk.Tk):
 
         self._build_temperature(outer)
         self._build_status(outer)
+        self._build_history(outer)
         self._build_background(outer)
         self._build_activity(outer)
         self._build_footer(outer)
@@ -160,7 +162,7 @@ class App(tk.Tk):
 
     def _build_temperature(self, parent: tk.Misc) -> None:
         group = ttk.LabelFrame(parent, text="Temperature limit", padding=10)
-        group.pack(fill="x", pady=(10, 0))
+        group.pack(fill="x", pady=(8, 0))
 
         top = ttk.Frame(group)
         top.pack(fill="x")
@@ -197,7 +199,7 @@ class App(tk.Tk):
 
     def _build_status(self, parent: tk.Misc) -> None:
         group = ttk.LabelFrame(parent, text="Status", padding=10)
-        group.pack(fill="x", pady=(10, 0))
+        group.pack(fill="x", pady=(8, 0))
         group.columnconfigure(1, weight=1)
         group.columnconfigure(3, weight=1)
 
@@ -216,9 +218,15 @@ class App(tk.Tk):
                 row=row, column=column + 1, sticky="w", padx=(6, 20), pady=1
             )
 
+    def _build_history(self, parent: tk.Misc) -> None:
+        group = ttk.LabelFrame(parent, text="Temperature history (last 60 s)", padding=(10, 8))
+        group.pack(fill="x", pady=(8, 0))
+        self.graph = TemperatureGraph(group)
+        self.graph.pack(fill="x")
+
     def _build_background(self, parent: tk.Misc) -> None:
         group = ttk.LabelFrame(parent, text="Background", padding=10)
-        group.pack(fill="x", pady=(10, 0))
+        group.pack(fill="x", pady=(8, 0))
 
         ttk.Checkbutton(
             group, text="Keep the limit applied automatically",
@@ -256,12 +264,12 @@ class App(tk.Tk):
 
     def _build_activity(self, parent: tk.Misc) -> None:
         group = ttk.LabelFrame(parent, text="Activity", padding=(10, 8))
-        group.pack(fill="both", expand=True, pady=(10, 0))
+        group.pack(fill="both", expand=True, pady=(8, 0))
         group.columnconfigure(0, weight=1)
         group.rowconfigure(0, weight=1)
 
         self.log_text = tk.Text(
-            group, height=6, wrap="word", font=MONO, state="disabled",
+            group, height=4, wrap="word", font=MONO, state="disabled",
             relief="solid", borderwidth=1, highlightthickness=0,
             padx=6, pady=4, background="#ffffff", foreground="#333333",
         )
@@ -275,7 +283,7 @@ class App(tk.Tk):
 
     def _build_footer(self, parent: tk.Misc) -> None:
         footer = ttk.Frame(parent)
-        footer.pack(fill="x", pady=(8, 0))
+        footer.pack(fill="x", pady=(6, 0))
 
         self.driver_label = ttk.Label(footer, textvariable=self.driver_var, style="Hint.TLabel")
         self.driver_label.pack(side="left")
@@ -286,9 +294,9 @@ class App(tk.Tk):
         self.status_label.pack(side="right")
 
     def _build_bottom_bar(self, parent: tk.Misc) -> None:
-        ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=(8, 0))
+        ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=(6, 0))
         bar = ttk.Frame(parent)
-        bar.pack(fill="x", pady=(6, 0))
+        bar.pack(fill="x", pady=(4, 0))
 
         ttk.Label(bar, text=f"Version {__version__}", style="Hint.TLabel").pack(side="left")
         self.update_button = ttk.Button(bar, text="Check for updates", command=self._on_update_button)
@@ -362,6 +370,8 @@ class App(tk.Tk):
             self.scale_var.set(float(value))
         finally:
             self._syncing = False
+        if hasattr(self, "graph"):
+            self.graph.set_target(max(MIN_TEMP, min(MAX_TEMP, value)))
 
     def _target(self) -> int:
         try:
@@ -381,7 +391,7 @@ class App(tk.Tk):
                 self._log(f"Telemetry unavailable: {exc}", "err")
                 self._status("Waiting for hardware access", error=True)
         finally:
-            self.after(2000, self._poll)
+            self.after(1000, self._poll)
 
     def _render_live(self) -> None:
         live = self.live
@@ -397,6 +407,12 @@ class App(tk.Tk):
         self.load_var.set("—" if live.load is None else f"{live.load:.0f} %")
         self.power_var.set("—" if live.socket_power is None else f"{live.socket_power:.0f} W")
         self.gfx_var.set("—" if live.gfx_clk is None else f"{live.gfx_clk:.0f} MHz")
+
+        self.graph.set_target(self._target())
+        if live.tctl is None:
+            self.graph.tick()
+        else:
+            self.graph.add(live.tctl)
 
     def _apply(self, initial: bool = False) -> None:
         try:
@@ -788,3 +804,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
