@@ -156,6 +156,8 @@ machine, and a manual launch still asks for administrator rights (UAC).
 Settings from the old `%ProgramData%\RyzenTempLimit` location are migrated
 automatically on first start.
 
+The application has no telemetry; see [PRIVACY.md](PRIVACY.md).
+
 ## Uninstall
 
 1. Untick **Keep applied in the background** and close the app.
