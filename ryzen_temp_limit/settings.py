@@ -18,17 +18,22 @@ class Settings:
     interval_min: int = DEFAULT_INTERVAL_MIN
     autostart: bool = False
     skipped_version: str = ""
+    original_limit: int | None = None
 
     def normalized(self) -> Settings:
         temp = max(MIN_TEMP, min(MAX_TEMP, int(self.temp)))
         interval = max(1, min(120, int(self.interval_min)))
         skipped = str(self.skipped_version or "").strip()
+        original = None
+        if self.original_limit is not None:
+            original = max(MIN_TEMP, min(MAX_TEMP, int(self.original_limit)))
         return replace(
             self,
             temp=temp,
             interval_min=interval,
             autostart=bool(self.autostart),
             skipped_version=skipped,
+            original_limit=original,
         )
 
 
@@ -108,6 +113,7 @@ def load() -> Settings:
         interval_min=raw.get("interval_min", DEFAULT_INTERVAL_MIN),
         autostart=raw.get("autostart", False),
         skipped_version=raw.get("skipped_version", ""),
+        original_limit=raw.get("original_limit"),
     ).normalized()
 
 

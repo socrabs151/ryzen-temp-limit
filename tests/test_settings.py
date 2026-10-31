@@ -21,8 +21,17 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(store.load(), store.Settings())
 
     def test_roundtrip(self) -> None:
-        store.save(store.Settings(temp=90, interval_min=10, autostart=True))
-        self.assertEqual(store.load(), store.Settings(temp=90, interval_min=10, autostart=True))
+        store.save(
+            store.Settings(temp=90, interval_min=10, autostart=True, original_limit=105)
+        )
+        self.assertEqual(
+            store.load(),
+            store.Settings(temp=90, interval_min=10, autostart=True, original_limit=105),
+        )
+
+    def test_original_limit_is_clamped(self) -> None:
+        self.assertEqual(store.Settings(original_limit=500).normalized().original_limit, store.MAX_TEMP)
+        self.assertIsNone(store.Settings(original_limit=None).normalized().original_limit)
 
     def test_out_of_range_is_clamped(self) -> None:
         normalized = store.Settings(temp=500, interval_min=0).normalized()

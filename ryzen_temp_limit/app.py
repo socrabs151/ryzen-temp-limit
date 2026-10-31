@@ -27,7 +27,7 @@ INTERVALS = [1, 5, 10, 15, 30]
 ERROR_COLOR = "#c42b1c"
 TEXT_COLOR = "#1a1a1a"
 HINT_COLOR = "#666666"
-RESTORE_TEMP = 95
+RESTORE_FALLBACK = 95
 
 BODY = ("Segoe UI", 9)
 SMALL = ("Segoe UI", 8)
@@ -112,6 +112,7 @@ class App(tk.Tk):
         self._setup_style()
         self._build()
         self._update_pause_state()
+        self._update_restore_button()
         self._fit_to_content()
         self.temp_var.trace_add("write", self._on_temp_changed)
         self.bind("<Return>", lambda _event: self._apply())
@@ -188,9 +189,8 @@ class App(tk.Tk):
         ttk.Label(row, text="°C").pack(side="left")
         self.apply_button = ttk.Button(row, text="Apply", command=self._apply)
         self.apply_button.pack(side="left", padx=(14, 0))
-        ttk.Button(row, text=f"Restore {RESTORE_TEMP} °C", command=self._restore).pack(
-            side="left", padx=(8, 0)
-        )
+        self.restore_button = ttk.Button(row, text="Restore", command=self._restore)
+        self.restore_button.pack(side="left", padx=(8, 0))
 
         ttk.Label(
             group, text="A lower limit reduces heat, but also sustained performance.",
@@ -339,6 +339,8 @@ class App(tk.Tk):
             self._status("Unsupported processor family", error=True)
             return
 
+        if not self.autostart_var.get():
+            self._capture_original_limit()
         self._apply(initial=True)
 
     def _set_driver(self, version: str | None) -> None:
@@ -480,8 +482,34 @@ class App(tk.Tk):
         autostart.run_now()
         self._log("Background task started manually", "muted")
 
+    def _restore_target(self) -> int:
+        value = self.settings.original_limit
+        return int(value) if value is not None else RESTORE_FALLBACK
+
+    def _update_restore_button(self) -> None:
+        self.restore_button.configure(text=f"Restore {self._restore_target()} °C")
+
+    def _capture_original_limit(self) -> None:
+        if self.settings.original_limit is not None:
+            return
+        try:
+            value = core.read_limit()
+        except Exception:
+            return
+        if value is None:
+            return
+        limit = max(MIN_TEMP, min(MAX_TEMP, int(round(value))))
+        self.settings = replace(self.settings, original_limit=limit)
+        try:
+            settings_mod.save(self.settings)
+        except OSError:
+            pass
+        core.log.info("captured original SMU limit: %s °C", limit)
+        self._log(f"Original SMU limit captured: {limit} °C", "muted")
+        self._update_restore_button()
+
     def _restore(self) -> None:
-        self.temp_var.set(RESTORE_TEMP)
+        self.temp_var.set(self._restore_target())
         self._apply()
 
     def _pause(self) -> None:
@@ -559,6 +587,7 @@ class App(tk.Tk):
             interval_min=self._interval(),
             autostart=bool(self.autostart_var.get()),
             skipped_version=self.skipped_version,
+            original_limit=self.settings.original_limit,
         ).normalized()
 
     def _save(self) -> None:
@@ -804,4 +833,5 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
