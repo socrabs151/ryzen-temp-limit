@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ryzen-temp-limit"
-version = "0.3.2"
+version = "0.3.3"
 description = "Small Windows GUI to cap AMD Ryzen CPU temperature via PawnIO"
 readme = "README.md"
 requires-python = ">=3.10"

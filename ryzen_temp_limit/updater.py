@@ -169,28 +169,48 @@ def _ps_quote(value: str) -> str:
 
 
 UPDATER_SCRIPT = """$ErrorActionPreference = 'Stop'
-$log = {log_path}
+$log = @LOG@
 function Write-Log([string]$message) { "$(Get-Date -Format s) $message" | Out-File -LiteralPath $log -Append -Encoding UTF8 }
 try {
-    Write-Log "waiting for process {pid}"
+    Write-Log "waiting for process @PID@"
     $deadline = (Get-Date).AddSeconds(90)
-    while ((Get-Process -Id {pid} -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $deadline)) {
+    while ((Get-Process -Id @PID@ -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $deadline)) {
         Start-Sleep -Milliseconds 200
     }
     Start-Sleep -Milliseconds 800
-    if ({single_file}) {
-        Copy-Item -LiteralPath {new_exe} -Destination {exe_path} -Force
+    if (@SINGLE@) {
+        Copy-Item -LiteralPath @NEW_EXE@ -Destination @EXE@ -Force
         Write-Log "replaced executable"
     } else {
-        robocopy {source} {target} /E /NFL /NDL /NJH /NJS /R:3 /W:1 | Out-Null
+        robocopy @SOURCE@ @TARGET@ /E /NFL /NDL /NJH /NJS /R:3 /W:1 | Out-Null
         Write-Log "robocopy exit $LASTEXITCODE"
     }
-    Start-Process -FilePath {exe_path}
+    Start-Process -FilePath @EXE@
     Write-Log "restarted"
 } catch {
     Write-Log "FAILED: $($_.Exception.Message)"
 }
 """
+
+
+def render_updater_script(
+    pid: int,
+    mode: str,
+    source: Path | None,
+    target: Path,
+    exe: Path,
+    new_exe: Path | None,
+    workdir: Path,
+) -> str:
+    return (
+        UPDATER_SCRIPT.replace("@LOG@", _ps_quote(str(workdir / "update.log")))
+        .replace("@PID@", str(int(pid)))
+        .replace("@SINGLE@", "$true" if mode == "onefile" else "$false")
+        .replace("@NEW_EXE@", _ps_quote(str(new_exe)) if new_exe else _ps_quote(""))
+        .replace("@SOURCE@", _ps_quote(str(source)) if source else _ps_quote(""))
+        .replace("@TARGET@", _ps_quote(str(target)))
+        .replace("@EXE@", _ps_quote(str(exe)))
+    )
 
 
 def _launch_updater(
@@ -202,21 +222,11 @@ def _launch_updater(
     new_exe: Path | None,
     workdir: Path,
 ) -> Path:
-    script = UPDATER_SCRIPT.format(
-        pid=int(pid),
-        log_path=_ps_quote(str(workdir / "update.log")),
-        single_file="$true" if mode == "onefile" else "$false",
-        new_exe=_ps_quote(str(new_exe)) if new_exe else _ps_quote(""),
-        source=_ps_quote(str(source)) if source else _ps_quote(""),
-        target=_ps_quote(str(target)),
-        exe_path=_ps_quote(str(exe)),
-    )
+    script = render_updater_script(pid, mode, source, target, exe, new_exe, workdir)
     script_path = workdir / "apply-update.ps1"
     script_path.write_text(script, encoding="utf-8")
 
-    flags = 0
-    if os.name == "nt":
-        flags = 0x08000000 | 0x00000008
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     subprocess.Popen(
         [
             "powershell.exe",

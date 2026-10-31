@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3
+
+- Fixed the self-updater failing with a `KeyError` while rendering the
+  PowerShell helper (literal braces were treated as format fields).
+- Fixed the updater process not starting: `DETACHED_PROCESS` was removed and
+  only `CREATE_NO_WINDOW` is used.
+- Verified the updater end-to-end (wait, robocopy, restart).
+
 ## 0.3.2
 
 - Notification-area icon with quick actions (show, apply, restore, pause,

@@ -56,6 +56,36 @@ class AssetTests(unittest.TestCase):
     def test_source_checkout_is_not_frozen(self) -> None:
         self.assertIsNone(updater.frozen_mode())
 
+    def test_render_updater_script(self) -> None:
+        script = updater.render_updater_script(
+            pid=1234,
+            mode="onedir",
+            source=Path(r"C:\stage"),
+            target=Path(r"C:\app"),
+            exe=Path(r"C:\app\RyzenTempLimit.exe"),
+            new_exe=None,
+            workdir=Path(r"C:\work"),
+        )
+        self.assertIn("1234", script)
+        self.assertIn("robocopy 'C:\\stage' 'C:\\app'", script)
+        self.assertIn("Start-Process -FilePath 'C:\\app\\RyzenTempLimit.exe'", script)
+        self.assertNotIn("@PID@", script)
+        self.assertNotIn("@LOG@", script)
+        self.assertNotIn("@EXE@", script)
+
+    def test_render_updater_script_single_file(self) -> None:
+        script = updater.render_updater_script(
+            pid=99,
+            mode="onefile",
+            source=None,
+            target=Path(r"C:\app"),
+            exe=Path(r"C:\app\RyzenTempLimit.exe"),
+            new_exe=Path(r"C:\work\new.exe"),
+            workdir=Path(r"C:\work"),
+        )
+        self.assertIn("if ($true)", script)
+        self.assertIn("Copy-Item -LiteralPath 'C:\\work\\new.exe'", script)
+
     def test_update_root_uses_local_appdata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             previous = os.environ.get("LOCALAPPDATA")
