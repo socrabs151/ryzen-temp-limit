@@ -94,6 +94,20 @@ The workflow refuses to publish if the tag and `ryzen_temp_limit.__version__`
 differ. To ship a new version, bump the version, commit, then push a matching
 `vX.Y.Z` tag.
 
+### Antivirus notes
+
+The application is unsigned, so heuristics may complain about things that are
+legitimate here:
+
+- the background job is a scheduled task that runs **as the current user**
+  (`InteractiveToken`, highest privileges) at logon and calls
+  `ryzen-temp-limit --apply-only`. It is not a SYSTEM service;
+- updates are downloaded to `%LOCALAPPDATA%\RyzenTempLimit\update`, verified
+  against the published SHA-256 and applied after the app exits.
+
+If Defender flags a build as `Behavior:Win32/Persistence`, it is a false
+positive — submit the file to Microsoft. Code signing is the long-term fix.
+
 ## Build a standalone executable
 
 Default build produces a folder (`onedir`), which starts in about 0.3 s:
@@ -121,7 +135,8 @@ machine, and a manual launch still asks for administrator rights (UAC).
 
 - Settings: `%ProgramData%\RyzenTempLimit\settings.json`
 - Log: `%ProgramData%\RyzenTempLimit\app.log`
-- Scheduled task: `RyzenTempLimit`
+- Downloaded updates: `%LOCALAPPDATA%\RyzenTempLimit\update`
+- Scheduled task: `RyzenTempLimit` (current user, highest privileges)
 
 ## Uninstall
 

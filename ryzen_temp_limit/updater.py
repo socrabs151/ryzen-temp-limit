@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import ssl
 import subprocess
 import sys
@@ -65,6 +66,11 @@ def _request(url: str, timeout: int = 15) -> urllib.request.Request:
 
 def ssl_context() -> ssl.SSLContext:
     return ssl.create_default_context(cafile=certifi.where())
+
+
+def update_root() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    return Path(base) / "RyzenTempLimit" / "update"
 
 
 def fetch_latest(timeout: int = 15) -> Release:
@@ -163,7 +169,7 @@ def _ps_quote(value: str) -> str:
 
 
 UPDATER_SCRIPT = """$ErrorActionPreference = 'Stop'
-$log = Join-Path $env:TEMP 'RyzenTempLimit-update.log'
+$log = {log_path}
 function Write-Log([string]$message) { "$(Get-Date -Format s) $message" | Out-File -LiteralPath $log -Append -Encoding UTF8 }
 try {
     Write-Log "waiting for process {pid}"
@@ -194,16 +200,18 @@ def _launch_updater(
     target: Path,
     exe: Path,
     new_exe: Path | None,
+    workdir: Path,
 ) -> Path:
     script = UPDATER_SCRIPT.format(
         pid=int(pid),
+        log_path=_ps_quote(str(workdir / "update.log")),
         single_file="$true" if mode == "onefile" else "$false",
         new_exe=_ps_quote(str(new_exe)) if new_exe else _ps_quote(""),
         source=_ps_quote(str(source)) if source else _ps_quote(""),
         target=_ps_quote(str(target)),
         exe_path=_ps_quote(str(exe)),
     )
-    script_path = Path(tempfile.gettempdir()) / "RyzenTempLimit-update.ps1"
+    script_path = workdir / "apply-update.ps1"
     script_path.write_text(script, encoding="utf-8")
 
     flags = 0
@@ -240,7 +248,9 @@ def install(release: Release, progress=None) -> None:
     if not sums_url:
         raise UpdateError("The release does not include checksums")
 
-    workdir = Path(tempfile.mkdtemp(prefix="RyzenTempLimit-update-"))
+    workdir = update_root() / release.version
+    shutil.rmtree(workdir, ignore_errors=True)
+    workdir.mkdir(parents=True, exist_ok=True)
     sums_path = download(sums_url, workdir / SUMS_ASSET)
     expected = parse_sums(sums_path.read_text(encoding="utf-8", errors="replace")).get(asset_name)
     if not expected:
@@ -263,7 +273,7 @@ def install(release: Release, progress=None) -> None:
             archive.extractall(stage)
         if not (stage / "RyzenTempLimit.exe").is_file():
             raise UpdateError("The update archive is missing RyzenTempLimit.exe")
-        _launch_updater(os.getpid(), mode, stage, target, exe, None)
+        _launch_updater(os.getpid(), mode, stage, target, exe, None, workdir)
     else:
-        _launch_updater(os.getpid(), mode, None, target, exe, asset_path)
+        _launch_updater(os.getpid(), mode, None, target, exe, asset_path, workdir)
 

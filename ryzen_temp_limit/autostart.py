@@ -19,14 +19,14 @@ TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
     <URI>\\{task}</URI>
   </RegistrationInfo>
   <Triggers>
-    <BootTrigger>
+    <LogonTrigger>
       <Enabled>true</Enabled>
       <Delay>PT20S</Delay>
       <Repetition>
         <Interval>PT{interval}M</Interval>
         <StopAtDurationEnd>false</StopAtDurationEnd>
       </Repetition>
-    </BootTrigger>
+    </LogonTrigger>
     <CalendarTrigger>
       <StartBoundary>{start}</StartBoundary>
       <Enabled>true</Enabled>
@@ -45,7 +45,8 @@ TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
   </Triggers>
   <Principals>
     <Principal id="Author">
-      <UserId>S-1-5-18</UserId>
+      <UserId>{user}</UserId>
+      <LogonType>InteractiveToken</LogonType>
       <RunLevel>HighestAvailable</RunLevel>
     </Principal>
   </Principals>
@@ -78,6 +79,14 @@ TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
 
 def _flags() -> int:
     return getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def _current_user() -> str:
+    user = os.environ.get("USERNAME") or os.environ.get("USER") or ""
+    domain = os.environ.get("USERDOMAIN")
+    if user and domain:
+        return f"{domain}\\{user}"
+    return user
 
 
 def _runner() -> tuple[str, str, str]:
@@ -135,6 +144,7 @@ def install(settings: Settings) -> None:
     xml = TASK_XML.format(
         description=escape(f"Keep AMD CPU temperature at {settings.temp} °C (Ryzen Temp Limit)"),
         task=TASK_NAME,
+        user=escape(_current_user()),
         interval=max(1, int(settings.interval_min)),
         start=start,
         command=escape(command),
