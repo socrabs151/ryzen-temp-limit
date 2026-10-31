@@ -16,6 +16,7 @@ from . import APP_NAME, MAX_TEMP, MIN_TEMP, __version__, autostart, core, update
 from . import settings as settings_mod
 from .elevation import is_admin, message_box, relaunch_as_admin
 from .settings import Settings
+from .single_instance import SingleInstance
 
 PAWNIO_URL = "https://github.com/namazso/PawnIO.Setup/releases/latest"
 INTERVALS = [1, 5, 10, 15, 30]
@@ -642,9 +643,15 @@ def main(argv: list[str] | None = None) -> int:
         message_box(APP_NAME, "Administrator rights are required to change CPU limits.", error=True)
         return 1
 
+    guard = SingleInstance()
+    if guard.already_running:
+        message_box(APP_NAME, "Ryzen Temp Limit is already running.")
+        return 0
+
     current = settings_mod.load()
     app = App(current)
     app.mainloop()
+    guard.release()
     return 0
 
 
