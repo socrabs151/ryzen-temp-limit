@@ -177,18 +177,33 @@ try {
     while ((Get-Process -Id @PID@ -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $deadline)) {
         Start-Sleep -Milliseconds 200
     }
-    Start-Sleep -Milliseconds 800
+    Start-Sleep -Milliseconds 500
+    $others = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and ($_.ExecutablePath -ieq @EXE@) })
+    foreach ($p in $others) {
+        Write-Log "stopping lingering process $($p.ProcessId)"
+        Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    if ($others.Count -gt 0) { Start-Sleep -Milliseconds 1200 }
     if (@SINGLE@) {
         Copy-Item -LiteralPath @NEW_EXE@ -Destination @EXE@ -Force
         Write-Log "replaced executable"
     } else {
-        robocopy @SOURCE@ @TARGET@ /E /NFL /NDL /NJH /NJS /R:3 /W:1 | Out-Null
-        Write-Log "robocopy exit $LASTEXITCODE"
+        robocopy @SOURCE@ @TARGET@ /E /NFL /NDL /NJH /NJS /R:2 /W:1 | Out-Null
+        $code = $LASTEXITCODE
+        Write-Log "robocopy exit $code"
+        if ($code -ge 8) { throw "robocopy failed with exit code $code" }
+    }
+    $expected = @VERSION@
+    if ($expected) {
+        $actual = (Get-Item -LiteralPath @EXE@).VersionInfo.FileVersion
+        Write-Log "target version $actual (expected $expected)"
+        if ($actual -ne $expected) { throw "version mismatch after update" }
     }
     Start-Process -FilePath @EXE@
     Write-Log "restarted"
 } catch {
     Write-Log "FAILED: $($_.Exception.Message)"
+    try { Start-Process -FilePath @EXE@; Write-Log "restarted the existing version" } catch { Write-Log "could not restart: $($_.Exception.Message)" }
 }
 """
 
@@ -201,9 +216,11 @@ def render_updater_script(
     exe: Path,
     new_exe: Path | None,
     workdir: Path,
+    version: str = "",
 ) -> str:
     return (
         UPDATER_SCRIPT.replace("@LOG@", _ps_quote(str(workdir / "update.log")))
+        .replace("@VERSION@", _ps_quote(version))
         .replace("@PID@", str(int(pid)))
         .replace("@SINGLE@", "$true" if mode == "onefile" else "$false")
         .replace("@NEW_EXE@", _ps_quote(str(new_exe)) if new_exe else _ps_quote(""))
@@ -221,8 +238,9 @@ def _launch_updater(
     exe: Path,
     new_exe: Path | None,
     workdir: Path,
+    version: str = "",
 ) -> Path:
-    script = render_updater_script(pid, mode, source, target, exe, new_exe, workdir)
+    script = render_updater_script(pid, mode, source, target, exe, new_exe, workdir, version)
     script_path = workdir / "apply-update.ps1"
     script_path.write_text(script, encoding="utf-8")
 
@@ -258,7 +276,7 @@ def install(release: Release, progress=None) -> None:
     if not sums_url:
         raise UpdateError("The release does not include checksums")
 
-    workdir = update_root() / release.version
+    workdir = update_root() / release.version / str(os.getpid())
     shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(parents=True, exist_ok=True)
     sums_path = download(sums_url, workdir / SUMS_ASSET)
@@ -283,7 +301,8 @@ def install(release: Release, progress=None) -> None:
             archive.extractall(stage)
         if not (stage / "RyzenTempLimit.exe").is_file():
             raise UpdateError("The update archive is missing RyzenTempLimit.exe")
-        _launch_updater(os.getpid(), mode, stage, target, exe, None, workdir)
+        _launch_updater(os.getpid(), mode, stage, target, exe, None, workdir, release.version)
     else:
-        _launch_updater(os.getpid(), mode, None, target, exe, asset_path, workdir)
+        _launch_updater(os.getpid(), mode, None, target, exe, asset_path, workdir, release.version)
+
 

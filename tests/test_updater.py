@@ -65,8 +65,11 @@ class AssetTests(unittest.TestCase):
             exe=Path(r"C:\app\RyzenTempLimit.exe"),
             new_exe=None,
             workdir=Path(r"C:\work"),
+            version="0.3.5",
         )
         self.assertIn("1234", script)
+        self.assertIn("$expected = '0.3.5'", script)
+        self.assertIn("Get-CimInstance Win32_Process", script)
         self.assertIn("robocopy 'C:\\stage' 'C:\\app'", script)
         self.assertIn("Start-Process -FilePath 'C:\\app\\RyzenTempLimit.exe'", script)
         self.assertNotIn("@PID@", script)
@@ -82,6 +85,7 @@ class AssetTests(unittest.TestCase):
             exe=Path(r"C:\app\RyzenTempLimit.exe"),
             new_exe=Path(r"C:\work\new.exe"),
             workdir=Path(r"C:\work"),
+            version="0.3.5",
         )
         self.assertIn("if ($true)", script)
         self.assertIn("Copy-Item -LiteralPath 'C:\\work\\new.exe'", script)
@@ -102,3 +106,4 @@ class AssetTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

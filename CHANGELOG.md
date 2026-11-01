@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.6
+
+- Fixed the self-updater leaving the app alive in the tray: the app now stops
+  the tray and exits before the updater replaces its files.
+- The updater closes lingering instances, checks the robocopy result and the
+  target version, and restarts the existing build if the update fails.
+- Each updater uses its own work directory, so concurrent updates no longer
+  overwrite each other.
+- Fixed the download progress bar.
+
 ## 0.3.5
 
 - Read-only thermal watchdog: warns when the SMU limit differs from the

@@ -1,4 +1,4 @@
-﻿# Ryzen Temp Limit
+# Ryzen Temp Limit
 
 A small Windows GUI that caps the temperature of AMD Ryzen CPUs (desktops and
 laptops) by writing the SMU thermal limit through the signed **PawnIO** driver.
@@ -109,6 +109,10 @@ v0.2.0
 ├── sha256sums.txt
 └── source archives (added by GitHub)
 ```
+
+The updater closes other running instances before replacing files. Builds
+before 0.3.6 cannot self-update (they left a tray process alive); install
+0.3.6 manually once, later updates work normally.
 
 The workflow refuses to publish if the tag and `ryzen_temp_limit.__version__`
 differ. To ship a new version, bump the version, commit, then push a matching

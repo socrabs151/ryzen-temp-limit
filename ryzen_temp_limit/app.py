@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import ctypes
@@ -809,6 +809,8 @@ class App(tk.Tk):
             return
         self._updating = True
         self.update_button.configure(state="disabled")
+        self.progress.pack(side="left", padx=(10, 0))
+        self.progress["value"] = 0
         self._status("Downloading update…")
         self._log(f"Downloading update {release.version}…", "muted")
         threading.Thread(target=self._update_worker, args=(release,), daemon=True).start()
@@ -823,12 +825,14 @@ class App(tk.Tk):
         self._post(self._on_update_ready)
 
     def _on_progress(self, fraction: float) -> None:
-        self._status(f"Downloading update… {fraction * 100:.0f}%")
+        self.progress["value"] = fraction * 100
+        self._status(f"Downloading update: {fraction * 100:.0f}%")
 
     def _on_update_ready(self) -> None:
-        self._status("Restarting to finish the update…")
-        self._log("Update downloaded. Restarting…", "ok")
-        self.after(500, self.destroy)
+        self.progress["value"] = 100
+        self._status("Restarting to finish the update:")
+        self._log("Update downloaded. Restarting:", "ok")
+        self.after(500, self._quit)
 
     def _on_update_failed(self, message: str) -> None:
         self._updating = False
@@ -919,6 +923,7 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
 
