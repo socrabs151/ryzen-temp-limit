@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import ctypes
@@ -355,7 +355,7 @@ class App(tk.Tk):
             self._status("Unsupported processor family", error=True)
             return
 
-        if not self.autostart_var.get():
+        if not self.settings.managed and not self.autostart_var.get():
             self._capture_original_limit()
         self._apply(initial=True)
 
@@ -462,6 +462,12 @@ class App(tk.Tk):
             self._status(f"Applied at {time.strftime('%H:%M:%S')}")
             if self.autostart_var.get():
                 self._install_task(silent=True)
+            if not self.settings.managed:
+                self.settings = replace(self.settings, managed=True)
+                try:
+                    settings_mod.save(self.settings)
+                except OSError:
+                    pass
         except Exception as exc:
             core.log.error("apply failed: %s", exc)
             self._log(f"Apply failed: {exc}", "err")
@@ -526,7 +532,7 @@ class App(tk.Tk):
         if value is None:
             return
         limit = max(MIN_TEMP, min(MAX_TEMP, int(round(value))))
-        self.settings = replace(self.settings, original_limit=limit)
+        self.settings = replace(self.settings, original_limit=limit, managed=True)
         try:
             settings_mod.save(self.settings)
         except OSError:
@@ -614,6 +620,7 @@ class App(tk.Tk):
             interval_min=self._interval(),
             autostart=bool(self.autostart_var.get()),
             close_to_tray=bool(self.close_to_tray_var.get()),
+            managed=self.settings.managed,
             skipped_version=self.skipped_version,
             original_limit=self.settings.original_limit,
         ).normalized()
@@ -783,7 +790,7 @@ class App(tk.Tk):
     def _reset_settings(self) -> None:
         keep_autostart = bool(self.autostart_var.get())
         self.skipped_version = ""
-        self.settings = Settings(autostart=keep_autostart)
+        self.settings = Settings(autostart=keep_autostart, managed=True)
         try:
             settings_mod.save(self.settings)
         except OSError:
@@ -923,6 +930,7 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
 

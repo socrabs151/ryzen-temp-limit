@@ -129,8 +129,12 @@ legitimate here:
 - updates are downloaded to `%LOCALAPPDATA%\RyzenTempLimit\update`, verified
   against the published SHA-256 and applied after the app exits.
 
-If Defender flags a build as `Behavior:Win32/Persistence`, it is a false
-positive — submit the file to Microsoft. Code signing is the long-term fix.
+If Defender flags the unsigned build or its background task
+(`Behavior:Win32/Execution` or `Behavior:Win32/Persistence`), it is a false
+positive: the app registers its own scheduled task. If you trust the build, add
+an exclusion for the install folder, the `RyzenTempLimit.exe` process and the
+`C:\Windows\System32\Tasks\RyzenTempLimit` task file. Code signing is the
+permanent fix.
 
 ## Build a standalone executable
 

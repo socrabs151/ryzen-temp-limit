@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import tempfile
@@ -49,6 +49,13 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(loaded.interval_min, store.DEFAULT_INTERVAL_MIN)
         self.assertFalse(loaded.autostart)
 
+    def test_existing_settings_without_managed_are_managed(self) -> None:
+        store.config_path().write_text('{"temp": 80}', encoding="utf-8")
+        self.assertTrue(store.load().managed)
+
+    def test_new_settings_are_not_managed(self) -> None:
+        self.assertFalse(store.load().managed)
+
     def test_migrates_settings_from_programdata(self) -> None:
         previous = {key: os.environ.get(key) for key in ("RYZEN_TEMP_LIMIT_DIR", "LOCALAPPDATA", "PROGRAMDATA")}
         os.environ.pop("RYZEN_TEMP_LIMIT_DIR", None)
@@ -76,3 +83,4 @@ class SettingsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

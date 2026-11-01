@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.7
+
+- Do not capture a false "original" limit on systems the app has already
+  managed. Existing settings are treated as managed, so Restore falls back to
+  95 °C instead of trusting a value the app itself applied.
+- README: guidance for Defender false positives on unsigned builds.
+
 ## 0.3.6
 
 - Fixed the self-updater leaving the app alive in the tray: the app now stops

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -18,6 +18,7 @@ class Settings:
     interval_min: int = DEFAULT_INTERVAL_MIN
     autostart: bool = False
     close_to_tray: bool = True
+    managed: bool = False
     skipped_version: str = ""
     original_limit: int | None = None
 
@@ -34,6 +35,7 @@ class Settings:
             interval_min=interval,
             autostart=bool(self.autostart),
             close_to_tray=bool(self.close_to_tray),
+            managed=bool(self.managed),
             skipped_version=skipped,
             original_limit=original,
         )
@@ -115,6 +117,7 @@ def load() -> Settings:
         interval_min=raw.get("interval_min", DEFAULT_INTERVAL_MIN),
         autostart=raw.get("autostart", False),
         close_to_tray=raw.get("close_to_tray", True),
+        managed=raw.get("managed", True),
         skipped_version=raw.get("skipped_version", ""),
         original_limit=raw.get("original_limit"),
     ).normalized()
@@ -126,3 +129,4 @@ def save(settings: Settings) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(asdict(settings), indent=2), encoding="utf-8")
     tmp.replace(path)
+
